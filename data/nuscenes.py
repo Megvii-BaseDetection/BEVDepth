@@ -1,3 +1,5 @@
+import os
+
 import mmcv
 import numpy as np
 import torch
@@ -147,22 +149,22 @@ def depth_transform(cam_depth, resize, resize_dims, crop, flip, rotate):
     return torch.Tensor(depth_map)
 
 
-# TODO: Change data3d to support lss.
 class NuscMVDetData(Dataset):
     def __init__(
-        self,
-        ida_aug_conf,
-        bda_aug_conf,
-        classes,
-        info_path,
-        is_train,
-        use_cbgs=False,
-        num_sweeps=1,
-        img_conf=dict(img_mean=[123.675, 116.28, 103.53],
-                      img_std=[58.395, 57.12, 57.375],
-                      to_rgb=True),
-        return_depth=False,
-        sweeps_idx=None,
+            self,
+            ida_aug_conf,
+            bda_aug_conf,
+            classes,
+            data_root,
+            info_path,
+            is_train,
+            use_cbgs=False,
+            num_sweeps=1,
+            img_conf=dict(img_mean=[123.675, 116.28, 103.53],
+                          img_std=[58.395, 57.12, 57.375],
+                          to_rgb=True),
+            return_depth=False,
+            sweeps_idx=list(),
     ):
         """Dataset used for bevdetection task.
         Args:
@@ -181,6 +183,7 @@ class NuscMVDetData(Dataset):
         self.is_train = is_train
         self.ida_aug_conf = ida_aug_conf
         self.bda_aug_conf = bda_aug_conf
+        self.data_root = data_root
         self.classes = classes
         self.use_cbgs = use_cbgs
         if self.use_cbgs:
@@ -191,6 +194,7 @@ class NuscMVDetData(Dataset):
         self.img_std = np.array(img_conf['img_std'], np.float32)
         self.to_rgb = img_conf['to_rgb']
         self.return_depth = return_depth
+        self.sweeps_idx = sweeps_idx
 
     def _get_sample_indices(self):
         """Load annotations from ann_file.
@@ -270,7 +274,7 @@ class NuscMVDetData(Dataset):
             flip_dy = False
         return rotate_bda, scale_bda, flip_dx, flip_dy
 
-    def get_image(self, sweeps_data, cams):
+    def get_image(self, cam_infos, cams):
         """Given data and cam_names, return image data needed.
 
         Args:
@@ -287,7 +291,9 @@ class NuscMVDetData(Dataset):
             Tensor: timestamps.
             dict: meta infos needed for evaluation.
         """
-        assert len(sweeps_data) > 0
+        import ipdb
+        ipdb.set_trace()
+        assert len(cam_infos) > 0
         sweep_imgs = list()
         sweep_sensor2ego_mats = list()
         sweep_intrin_mats = list()
@@ -302,45 +308,42 @@ class NuscMVDetData(Dataset):
             ida_mats = list()
             sensor2sensor_mats = list()
             timestamps = list()
-            key_info = sweeps_data[0]['info']
+            key_info = cam_infos[0]
             resize, resize_dims, crop, flip, \
                 rotate_ida = self.sample_ida_augmentation(
                     )
-            for sweep_idx, sweep_data in enumerate(sweeps_data):
-                sweep_info = sweep_data['info']
-                img = sweep_data[cam]
+            for sweep_idx, cam_info in enumerate(cam_infos):
+
+                img = mmcv.imread(os.path.join(cam_info[cam]['filename']))
                 img = Image.fromarray(img)
-                w, x, y, z = sweep_info['cam_infos'][cam]['calibrated_sensor'][
-                    'rotation']
+                w, x, y, z = cam_info[cam]['calibrated_sensor']['rotation']
                 # sweep sensor to sweep ego
                 sweepsensor2sweepego_rot = torch.Tensor(
                     Quaternion(w, x, y, z).rotation_matrix)
                 sweepsensor2sweepego_tran = torch.Tensor(
-                    sweep_info['cam_infos'][cam]['calibrated_sensor']
-                    ['translation'])
+                    cam_info[cam]['calibrated_sensor']['translation'])
                 sweepsensor2sweepego = sweepsensor2sweepego_rot.new_zeros(
                     (4, 4))
                 sweepsensor2sweepego[3, 3] = 1
                 sweepsensor2sweepego[:3, :3] = sweepsensor2sweepego_rot
                 sweepsensor2sweepego[:3, -1] = sweepsensor2sweepego_tran
                 # sweep ego to global
-                w, x, y, z = sweep_info['cam_infos'][cam]['ego_pose'][
-                    'rotation']
+                w, x, y, z = cam_info[cam]['ego_pose']['rotation']
                 sweepego2global_rot = torch.Tensor(
                     Quaternion(w, x, y, z).rotation_matrix)
                 sweepego2global_tran = torch.Tensor(
-                    sweep_info['cam_infos'][cam]['ego_pose']['translation'])
+                    cam_info[cam]['ego_pose']['translation'])
                 sweepego2global = sweepego2global_rot.new_zeros((4, 4))
                 sweepego2global[3, 3] = 1
                 sweepego2global[:3, :3] = sweepego2global_rot
                 sweepego2global[:3, -1] = sweepego2global_tran
 
                 # global sensor to cur ego
-                w, x, y, z = key_info['cam_infos'][cam]['ego_pose']['rotation']
+                w, x, y, z = key_info[cam]['ego_pose']['rotation']
                 keyego2global_rot = torch.Tensor(
                     Quaternion(w, x, y, z).rotation_matrix)
                 keyego2global_tran = torch.Tensor(
-                    key_info['cam_infos'][cam]['ego_pose']['translation'])
+                    key_info[cam]['ego_pose']['translation'])
                 keyego2global = keyego2global_rot.new_zeros((4, 4))
                 keyego2global[3, 3] = 1
                 keyego2global[:3, :3] = keyego2global_rot
@@ -348,13 +351,11 @@ class NuscMVDetData(Dataset):
                 global2keyego = keyego2global.inverse()
 
                 # cur ego to sensor
-                w, x, y, z = key_info['cam_infos'][cam]['calibrated_sensor'][
-                    'rotation']
+                w, x, y, z = key_info[cam]['calibrated_sensor']['rotation']
                 keysensor2keyego_rot = torch.Tensor(
                     Quaternion(w, x, y, z).rotation_matrix)
                 keysensor2keyego_tran = torch.Tensor(
-                    key_info['cam_infos'][cam]['calibrated_sensor']
-                    ['translation'])
+                    key_info[cam]['calibrated_sensor']['translation'])
                 keysensor2keyego = keysensor2keyego_rot.new_zeros((4, 4))
                 keysensor2keyego[3, 3] = 1
                 keysensor2keyego[:3, :3] = keysensor2keyego_rot
@@ -370,11 +371,10 @@ class NuscMVDetData(Dataset):
                 intrin_mat = torch.zeros((4, 4))
                 intrin_mat[3, 3] = 1
                 intrin_mat[:3, :3] = torch.Tensor(
-                    sweep_info['cam_infos'][cam]['calibrated_sensor']
-                    ['camera_intrinsic'])
+                    cam_info[cam]['calibrated_sensor']['camera_intrinsic'])
                 if self.return_depth and sweep_idx == 0:
                     depth_key = 'DEPTH_' + cam
-                    point_depth = sweep_data[depth_key]
+                    point_depth = cam_info[depth_key]
                     point_depth_augmented = depth_transform(
                         point_depth, resize, self.ida_aug_conf['final_dim'],
                         crop, flip, rotate_ida)
@@ -393,7 +393,7 @@ class NuscMVDetData(Dataset):
                 img = torch.from_numpy(img).permute(2, 0, 1)
                 imgs.append(img)
                 intrin_mats.append(intrin_mat)
-                timestamps.append(sweep_info['cam_infos'][cam]['timestamp'])
+                timestamps.append(cam_info[cam]['timestamp'])
             sweep_imgs.append(torch.stack(imgs))
             sweep_sensor2ego_mats.append(torch.stack(sensor2ego_mats))
             sweep_intrin_mats.append(torch.stack(intrin_mats))
@@ -401,13 +401,10 @@ class NuscMVDetData(Dataset):
             sweep_sensor2sensor_mats.append(torch.stack(sensor2sensor_mats))
             sweep_timestamps.append(torch.tensor(timestamps))
         # Get mean pose of all cams.
-        ego2global_rotation = np.mean([
-            key_info['cam_infos'][cam]['ego_pose']['rotation'] for cam in cams
-        ], 0)
-        ego2global_translation = np.mean([
-            key_info['cam_infos'][cam]['ego_pose']['translation']
-            for cam in cams
-        ], 0)
+        ego2global_rotation = np.mean(
+            [key_info[cam]['ego_pose']['rotation'] for cam in cams], 0)
+        ego2global_translation = np.mean(
+            [key_info[cam]['ego_pose']['translation'] for cam in cams], 0)
         img_metas = dict(
             box_type_3d=LiDARInstance3DBoxes,
             token=key_info['sample_token'],
@@ -486,27 +483,27 @@ class NuscMVDetData(Dataset):
         return cams
 
     def __getitem__(self, idx):
-        import pdb
-        pdb.set_trace()
+        import ipdb
+        ipdb.set_trace()
         if self.use_cbgs:
             idx = self.sample_indices[idx]
-        data = self.infos[idx]
-        cams = self.choose_cams()
-        sweep_datas = [data]
-        sweeps_imgs = data['sweeps_imgs']
-        # Some frames may don't have all 6 sweeps.
-        for i, sweep in enumerate(data['info']['sweeps']):
-            if len(sweep_datas) == self.num_sweeps:
-                break
-            sweep_data = dict()
-            for cam in cams:
-                sweep_data[cam] = sweeps_imgs[i][cam]
-            sweep_data['info'] = dict()
-            sweep_data['info']['cam_infos'] = sweep
-            sweep_datas.append(sweep_data)
-        for i in range(self.num_sweeps - len(sweep_datas)):
-            sweep_datas.append(data)
-        image_data_list = self.get_image(sweep_datas, cams)
+        info = self.infos[idx]
+        cam_infos = [self.infos[idx]['cam_infos']]
+        for sweep_idx in self.sweeps_idx:
+            if len(info['sweeps']) == 0:
+                cam_infos.append(info['cam_infos'])
+            elif sweep_idx >= len(info['sweeps']):
+                cam_infos.append(info['sweeps'][-1])
+            else:
+                cam_infos.append(info['sweeps'][sweep_idx])
+        # TODO: Check if it still works when number of cameras is reduced.
+        cams = [
+            'CAM_FRONT', 'CAM_FRONT_LEFT', 'CAM_FRONT_RIGHT', 'CAM_BACK',
+            'CAM_BACK_LEFT', 'CAM_BACK_RIGHT'
+        ]
+        ipdb.set_trace()
+        image_data_list = self.get_image(cam_infos, cams)
+        ret_list = list()
         (
             sweep_imgs,
             sweep_sensor2ego_mats,
@@ -517,7 +514,7 @@ class NuscMVDetData(Dataset):
             img_metas,
         ) = image_data_list[:7]
         if self.is_train:
-            gt_boxes, gt_labels = self.get_gt(data['info'], cams)
+            gt_boxes, gt_labels = self.get_gt(info, cams)
         # Temporary solution for test.
         else:
             gt_boxes = sweep_imgs.new_zeros(0, 7)
