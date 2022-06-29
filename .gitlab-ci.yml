@@ -1,0 +1,92 @@
+variables:
+    EXPECTED_MEMORY: 8000
+    EXPECTED_CPU: 2
+    EXPECTED_GPU: 0
+    PIP_CACHE_DIR: ${CI_PROJECT_DIR}/.cache/pip
+    PRE_COMMIT_HOME: ${CI_PROJECT_DIR}/.cache/pre-commit
+
+cache: &global_cache
+  key: default
+  paths:
+    - ${PRE_COMMIT_HOME}
+    - venv/
+
+before_script:
+  - pip config --global set global.index-url http://mirrors.i.brainpp.cn/pypi/simple
+  - pip config --global set global.extra-index-url http://pypi.i.brainpp.cn/brain/dev/+simple
+  - pip config --global set global.trusted-host "mirrors.i.brainpp.cn pypi.i.brainpp.cn"
+  - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@git-core.megvii-inc.com/".insteadOf "git@git-core.megvii-inc.com:"
+  - pip install virtualenv
+  - virtualenv venv --python=python3.6 --system-site-packages
+  - source venv/bin/activate
+
+stages:
+  - install
+  - static-analysis
+  - test
+  - deploy
+
+install:
+  stage: install
+  tags:
+    - docker
+  script:
+    - pip install --no-cache-dir -r requirements.txt
+    - pip install --no-cache-dir -r requirements-dev.txt
+    - pip install --no-cache-dir --no-deps --force-reinstall cvpack2_snapdet==0.0.5.beta
+    - pip install --no-cache-dir --no-deps --force-reinstall git+https://gitlab-ci-token:${CI_JOB_TOKEN}@git-core.megvii-inc.com/transformer/data3d.git
+    - python setup.py develop
+    - pre-commit install --install-hooks
+  only:  # Only execute this job when there is a change in the following files
+    changes:
+      - setup.py
+      - requirements.txt
+      - requirements-dev.txt
+      - .gitlab-ci.yml
+      - .pre-commit-config.yaml
+
+static-analysis:
+  stage: static-analysis
+  tags:
+    - docker
+  script:
+    - pre-commit install
+    # Run pre-commit to lint and format check files that were changed (but not deleted) compared to master.
+    - pre-commit run --files $(git diff --diff-filter=d --name-only origin/master)
+  cache:
+    <<: *global_cache
+    policy: pull
+
+pytest:
+  stage: test
+  tags:
+    - docker
+  script:
+    - python3 -m pytest --cov=perceptron --cov-report term --cov-report html:public/cov/ ./test
+    - coverage xml
+    - cd docs && make html
+  artifacts:
+    reports:
+      cobertura: coverage.xml
+    paths:
+      - public
+      - coverage.xml
+  cache:
+    <<: *global_cache
+    policy: pull
+
+pages:
+  stage: deploy
+  tags:
+    - docker
+  script:
+    - cd docs && make html && mv _build/html/* ../public
+  only:
+    - master
+    - docs
+  artifacts:
+    paths:
+      - public
+  cache:
+    <<: *global_cache
+    policy: pull
