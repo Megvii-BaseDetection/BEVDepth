@@ -149,6 +149,7 @@ def depth_transform(cam_depth, resize, resize_dims, crop, flip, rotate):
     return torch.Tensor(depth_map)
 
 
+# TODO: Support key_idxes, support depth_gt.
 class NuscMVDetData(Dataset):
     def __init__(
             self,
@@ -291,8 +292,6 @@ class NuscMVDetData(Dataset):
             Tensor: timestamps.
             dict: meta infos needed for evaluation.
         """
-        import ipdb
-        ipdb.set_trace()
         assert len(cam_infos) > 0
         sweep_imgs = list()
         sweep_sensor2ego_mats = list()
@@ -314,8 +313,9 @@ class NuscMVDetData(Dataset):
                     )
             for sweep_idx, cam_info in enumerate(cam_infos):
 
-                img = mmcv.imread(os.path.join(cam_info[cam]['filename']))
-                img = Image.fromarray(img)
+                img = Image.open(
+                    os.path.join(self.data_root, cam_info[cam]['filename']))
+                # img = Image.fromarray(img)
                 w, x, y, z = cam_info[cam]['calibrated_sensor']['rotation']
                 # sweep sensor to sweep ego
                 sweepsensor2sweepego_rot = torch.Tensor(
@@ -407,7 +407,6 @@ class NuscMVDetData(Dataset):
             [key_info[cam]['ego_pose']['translation'] for cam in cams], 0)
         img_metas = dict(
             box_type_3d=LiDARInstance3DBoxes,
-            token=key_info['sample_token'],
             ego2global_translation=ego2global_translation,
             ego2global_rotation=ego2global_rotation,
         )
@@ -483,8 +482,6 @@ class NuscMVDetData(Dataset):
         return cams
 
     def __getitem__(self, idx):
-        import ipdb
-        ipdb.set_trace()
         if self.use_cbgs:
             idx = self.sample_indices[idx]
         info = self.infos[idx]
@@ -497,11 +494,7 @@ class NuscMVDetData(Dataset):
             else:
                 cam_infos.append(info['sweeps'][sweep_idx])
         # TODO: Check if it still works when number of cameras is reduced.
-        cams = [
-            'CAM_FRONT', 'CAM_FRONT_LEFT', 'CAM_FRONT_RIGHT', 'CAM_BACK',
-            'CAM_BACK_LEFT', 'CAM_BACK_RIGHT'
-        ]
-        ipdb.set_trace()
+        cams = self.choose_cams()
         image_data_list = self.get_image(cam_infos, cams)
         ret_list = list()
         (
@@ -513,6 +506,7 @@ class NuscMVDetData(Dataset):
             sweep_timestamps,
             img_metas,
         ) = image_data_list[:7]
+        img_metas['token'] = info['sample_token']
         if self.is_train:
             gt_boxes, gt_labels = self.get_gt(info, cams)
         # Temporary solution for test.
@@ -552,7 +546,7 @@ class NuscMVDetData(Dataset):
         if self.use_cbgs:
             return len(self.sample_indices)
         else:
-            return super(NuscMVDetData, self).__len__()
+            return len(self.infos)
 
 
 def collate_fn(data, is_return_depth=False):

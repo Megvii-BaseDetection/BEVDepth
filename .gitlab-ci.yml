@@ -22,6 +22,7 @@
 
 stages:
   - lint
+  - unit-test
 
 
 check-format:
@@ -43,3 +44,34 @@ check-format:
     - isort --check-only -rc playground/examples
     - isort --check-only -rc tests
     - flake8 .
+
+
+unit-test:
+  stage: unit-test
+  needs: ["check-format"]
+  tags:
+    - rjob-gpu
+  variables:
+    <<: *rjob_cpu_variables
+  script:
+    - pip3 install --upgrade setuptools
+    - pip3 install megbrain==8.15.1
+    - printf "$AWS_ACCESS_KEY_ID_\n$AWS_SECRET_ACCESS_KEY_\n\n\n" | aws configure
+    - pip3 install -r requirements.txt --ignore-installed
+    - pip3 install -e .
+    - pip3 install -r requirements-dev.txt
+    - pip3 install opencv_python==4.2.0.34  # to avoid import cv2 errror
+    - python3 -m pytest tests --cov=basedet --junitxml=report.xml --cov-report=html --cov-report term
+    - coverage xml
+    - aws --endpoint-url=http://oss.i.brainpp.cn s3 sync htmlcov/ s3://basedet/coverage/htmlcov/
+  artifacts:
+    paths:
+      - coverage.xml
+      - report.xml
+    reports:
+      cobertura: coverage.xml
+      junit: report.xml
+  only:
+    - master
+    - merge_requests
+    - tags
