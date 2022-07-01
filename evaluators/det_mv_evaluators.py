@@ -1,3 +1,5 @@
+'''Modified from # https://github.com/nutonomy/nuscenes-devkit/blob/57889ff20678577025326cfc24e57424a829be0a/python-sdk/nuscenes/eval/detection/evaluate.py#L222 # noqa
+'''
 import os
 import os.path as osp
 import tempfile
@@ -47,7 +49,7 @@ class DetMVNuscEvaluator(BaseExecutor):
         callbacks=Sequence['Callback'],
         logger=None,
         eval_version='detection_cvpr_2019',
-        data_root='./data/nuscenes',
+        data_root='./data/nuScenes',
         version='v1.0-trainval',
         modality=dict(use_lidar=False,
                       use_camera=True,
@@ -116,13 +118,14 @@ class DetMVNuscEvaluator(BaseExecutor):
         metrics = mmcv.load(osp.join(output_dir, 'metrics_summary.json'))
         detail = dict()
         metric_prefix = f'{result_name}_NuScenes'
-        for name in self.CLASSES:
-            for k, v in metrics['label_aps'][name].items():
+        for class_name in self.class_names:
+            for k, v in metrics['label_aps'][class_name].items():
                 val = float('{:.4f}'.format(v))
-                detail['{}/{}_AP_dist_{}'.format(metric_prefix, name, k)] = val
-            for k, v in metrics['label_tp_errors'][name].items():
+                detail['{}/{}_AP_dist_{}'.format(metric_prefix, class_name,
+                                                 k)] = val
+            for k, v in metrics['label_tp_errors'][class_name].items():
                 val = float('{:.4f}'.format(v))
-                detail['{}/{}_{}'.format(metric_prefix, name, k)] = val
+                detail['{}/{}_{}'.format(metric_prefix, class_name, k)] = val
             for k, v in metrics['tp_errors'].items():
                 val = float('{:.4f}'.format(v))
                 detail['{}/{}'.format(metric_prefix,
