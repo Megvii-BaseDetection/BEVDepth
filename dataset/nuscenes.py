@@ -373,8 +373,11 @@ class NuscMVDetData(Dataset):
                 intrin_mat[:3, :3] = torch.Tensor(
                     cam_info[cam]['calibrated_sensor']['camera_intrinsic'])
                 if self.return_depth and sweep_idx == 0:
-                    depth_key = 'DEPTH_' + cam
-                    point_depth = cam_info[depth_key]
+                    file_name = os.path.split(cam_info[cam]['filename'])[-1]
+                    point_depth = np.fromfile(os.path.join(
+                        self.data_root, 'depth_gt', f'{file_name}.bin'),
+                                              dtype=np.float32,
+                                              count=-1).reshape(-1, 3)
                     point_depth_augmented = depth_transform(
                         point_depth, resize, self.ida_aug_conf['final_dim'],
                         crop, flip, rotate_ida)

@@ -6,7 +6,6 @@ import numpy as np
 from nuscenes.utils.data_classes import LidarPointCloud
 from nuscenes.utils.geometry_utils import view_points
 from pyquaternion import Quaternion
-from tqdm import tqdm
 
 
 # https://github.com/nutonomy/nuscenes-devkit/blob/master/python-sdk/nuscenes/nuscenes.py#L834
@@ -35,12 +34,12 @@ def map_pointcloud_to_image(
 
     # Third step: transform from global into the ego vehicle
     # frame for the timestamp of the image.
-    pc.translate(-np.array(cam_calibrated_sensor['translation']))
-    pc.rotate(Quaternion(cam_calibrated_sensor['rotation']).rotation_matrix.T)
-
-    # Fourth step: transform from ego into the camera.
     pc.translate(-np.array(cam_ego_pose['translation']))
     pc.rotate(Quaternion(cam_ego_pose['rotation']).rotation_matrix.T)
+
+    # Fourth step: transform from ego into the camera.
+    pc.translate(-np.array(cam_calibrated_sensor['translation']))
+    pc.rotate(Quaternion(cam_calibrated_sensor['rotation']).rotation_matrix.T)
 
     # Fifth step: actually take a "picture" of the point cloud.
     # Grab the depths (camera frame z axis points away from the camera).
@@ -83,8 +82,9 @@ cam_keys = [
 
 def worker(info):
     lidar_path = info['lidar_infos'][lidar_key]['filename']
-    points = np.fromfile(os.path.join(data_root,
-                                      lidar_path)).reshape(-1, 5)[..., :4]
+    points = np.fromfile(os.path.join(data_root, lidar_path),
+                         dtype=np.float32,
+                         count=-1).reshape(-1, 5)[..., :4]
     lidar_calibrated_sensor = info['lidar_infos'][lidar_key][
         'calibrated_sensor']
     lidar_ego_pose = info['lidar_infos'][lidar_key]['ego_pose']
@@ -93,11 +93,9 @@ def worker(info):
         cam_ego_pose = info['cam_infos'][cam_key]['ego_pose']
         img = mmcv.imread(
             os.path.join(data_root, info['cam_infos'][cam_key]['filename']))
-        pts_img, depth = map_pointcloud_to_image(points, img,
-                                                 lidar_calibrated_sensor,
-                                                 lidar_ego_pose,
-                                                 cam_calibrated_sensor,
-                                                 cam_ego_pose)
+        pts_img, depth = map_pointcloud_to_image(
+            points.copy(), img, lidar_calibrated_sensor.copy(),
+            lidar_ego_pose.copy(), cam_calibrated_sensor, cam_ego_pose)
         file_name = os.path.split(info['cam_infos'][cam_key]['filename'])[-1]
         np.concatenate([pts_img[:2, :].T, depth[:, None]],
                        axis=1).astype(np.float32).flatten().tofile(
@@ -111,7 +109,7 @@ if __name__ == '__main__':
     mmcv.mkdir_or_exist(os.path.join(data_root, 'depth_gt'))
     infos = mmcv.load(info_path)
     # import ipdb; ipdb.set_trace()
-    for info in tqdm(infos):
+    for info in infos:
         po.apply_async(func=worker, args=(info, ))
     po.close()
     po.join()
