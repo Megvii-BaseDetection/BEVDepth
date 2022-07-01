@@ -1,7 +1,7 @@
 variables:
     EXPECTED_MEMORY: 8000
     EXPECTED_CPU: 2
-    EXPECTED_GPU: 0
+    EXPECTED_GPU: 1
     PIP_CACHE_DIR: ${CI_PROJECT_DIR}/.cache/pip
     PRE_COMMIT_HOME: ${CI_PROJECT_DIR}/.cache/pre-commit
 
