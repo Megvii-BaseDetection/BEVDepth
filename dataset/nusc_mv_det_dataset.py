@@ -9,7 +9,7 @@ from PIL import Image
 from pyquaternion import Quaternion
 from torch.utils.data import Dataset
 
-__all__ = ['NuscMVDetData']
+__all__ = ['NuscMVDetDataset']
 
 map_name_from_general_to_detection = {
     'human.pedestrian.adult': 'pedestrian',
@@ -149,8 +149,8 @@ def depth_transform(cam_depth, resize, resize_dims, crop, flip, rotate):
     return torch.Tensor(depth_map)
 
 
-# TODO: Support key_idxes, support depth_gt.
-class NuscMVDetData(Dataset):
+# TODO: Support key_idxes.
+class NuscMVDetDataset(Dataset):
     def __init__(
             self,
             ida_aug_conf,
@@ -165,7 +165,7 @@ class NuscMVDetData(Dataset):
                           img_std=[58.395, 57.12, 57.375],
                           to_rgb=True),
             return_depth=False,
-            sweeps_idx=list(),
+            sweep_idxes=list(),
     ):
         """Dataset used for bevdetection task.
         Args:
@@ -195,7 +195,7 @@ class NuscMVDetData(Dataset):
         self.img_std = np.array(img_conf['img_std'], np.float32)
         self.to_rgb = img_conf['to_rgb']
         self.return_depth = return_depth
-        self.sweeps_idx = sweeps_idx
+        self.sweeps_idx = sweep_idxes
 
     def _get_sample_indices(self):
         """Load annotations from ann_file.
@@ -489,15 +489,20 @@ class NuscMVDetData(Dataset):
             idx = self.sample_indices[idx]
         info = self.infos[idx]
         cam_infos = [self.infos[idx]['cam_infos']]
+        # TODO: Check if it still works when number of cameras is reduced.
+        cams = self.choose_cams()
         for sweep_idx in self.sweeps_idx:
             if len(info['sweeps']) == 0:
                 cam_infos.append(info['cam_infos'])
-            elif sweep_idx >= len(info['sweeps']):
-                cam_infos.append(info['sweeps'][-1])
             else:
-                cam_infos.append(info['sweeps'][sweep_idx])
-        # TODO: Check if it still works when number of cameras is reduced.
-        cams = self.choose_cams()
+                # Handle scenarios when current sweep doesn't have all
+                # cam keys.
+                for i in range(min(len(info['sweeps']) - 1, sweep_idx), -1,
+                               -1):
+                    if sum([cam in info['sweeps'][i]
+                            for cam in cams]) == len(cams):
+                        cam_infos.append(info['sweeps'][i])
+                        break
         image_data_list = self.get_image(cam_infos, cams)
         ret_list = list()
         (
