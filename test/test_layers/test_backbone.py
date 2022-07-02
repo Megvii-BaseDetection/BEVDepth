@@ -12,7 +12,7 @@ class TestLSSFPN(unittest.TestCase):
             'y_bound': [-10, 10, 0.5],
             'z_bound': [-5, 3, 8],
             'd_bound': [2.0, 22, 1.0],
-            'final_dim': [32, 32],
+            'final_dim': [64, 64],
             'output_channels':
             10,
             'downsample_factor':
@@ -37,7 +37,7 @@ class TestLSSFPN(unittest.TestCase):
         self.lss_fpn = LSSFPN(**backbone_conf).cuda()
 
     def test_forward(self):
-        sweep_imgs = torch.rand(2, 2, 6, 3, 32, 32).cuda()
+        sweep_imgs = torch.rand(2, 2, 6, 3, 64, 64).cuda()
         sensor2ego_mats = torch.rand(2, 2, 6, 4, 4).cuda()
         intrin_mats = torch.rand(2, 2, 6, 4, 4).cuda()
         ida_mats = torch.rand(2, 2, 6, 4, 4).cuda()
