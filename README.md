@@ -38,6 +38,14 @@ bevdepth
 │   │   ├── v1.0-test
 |   |   ├── v1.0-trainval
 ```
+**Step 1.** Prepare infos.
+bash```
+python gen_info.py
+```
+**Step 2.** Prepare depth gt.
+bash```
+python gen_depth_gt.py
+```
 
 ## Cite BEVDepth
 If you use BEVDepth in your research, please cite our work by using the following BibTeX entry:
