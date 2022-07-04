@@ -12,6 +12,32 @@ estimation. For more details, please refer to our [paper on Arxiv](https://arxiv
 ## Benchmark
 
 ## Quick Start
+### Installation
+**Step 0.** Install [pytorch](https://pytorch.org/)(v1.9.0).
+
+**Step 1.** Install [MMDetection3D](https://github.com/open-mmlab/mmdetection3d)(v0.18.0).
+
+**Step 2.** Install requirements.
+```shell
+pip install -r requirements.txt
+```
+**Step 3.** Install BEVDepth(gpu required).
+```shell
+python setup.py develop
+```
+
+### Data preparation
+**Step 0.** Download nuScenes official dataset. and symlink the dataset root to `./data/`. The directory will be as follows.
+```
+bevdepth
+├── data
+│   ├── nuScenes
+│   │   ├── maps
+│   │   ├── samples
+│   │   ├── sweeps
+│   │   ├── v1.0-test
+|   |   ├── v1.0-trainval
+```
 
 ## Cite BEVDepth
 If you use BEVDepth in your research, please cite our work by using the following BibTeX entry:
