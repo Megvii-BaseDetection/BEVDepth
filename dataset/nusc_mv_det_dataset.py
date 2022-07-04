@@ -149,35 +149,38 @@ def depth_transform(cam_depth, resize, resize_dims, crop, flip, rotate):
     return torch.Tensor(depth_map)
 
 
-# TODO: Support key_idxes.
 class NuscMVDetDataset(Dataset):
-    def __init__(
-            self,
-            ida_aug_conf,
-            bda_aug_conf,
-            classes,
-            data_root,
-            info_path,
-            is_train,
-            use_cbgs=False,
-            num_sweeps=1,
-            img_conf=dict(img_mean=[123.675, 116.28, 103.53],
-                          img_std=[58.395, 57.12, 57.375],
-                          to_rgb=True),
-            return_depth=False,
-            sweep_idxes=list(),
-    ):
+    def __init__(self,
+                 ida_aug_conf,
+                 bda_aug_conf,
+                 classes,
+                 data_root,
+                 info_path,
+                 is_train,
+                 use_cbgs=False,
+                 num_sweeps=1,
+                 img_conf=dict(img_mean=[123.675, 116.28, 103.53],
+                               img_std=[58.395, 57.12, 57.375],
+                               to_rgb=True),
+                 return_depth=False,
+                 sweep_idxes=list(),
+                 key_idxes=list()):
         """Dataset used for bevdetection task.
         Args:
             ida_aug_conf (dict): Config for ida augmentation.
             bda_aug_conf (dict): Config for bda augmentation.
-            classes(list): Class names.
-            use_cbgs(bool): Whether to use cbgs strategy,
+            classes (list): Class names.
+            use_cbgs (bool): Whether to use cbgs strategy,
                 Default: False.
-            num_sweeps(int): Number of sweeps to be used for each sample.
+            num_sweeps (int): Number of sweeps to be used for each sample.
                 default: 1.
-            img_conf(dict): Config for image.
-            data_split(str): type of data.
+            img_conf (dict): Config for image.
+            return_depth (bool): Whether to use depth gt.
+                default: False.
+            sweep_idxes (list): List of sweep idxes to be used.
+                default: list().
+            key_idxes (list): List of key idxes to be used.
+                default: list().
         """
         super().__init__()
         self.infos = mmcv.load(info_path)
@@ -195,7 +198,14 @@ class NuscMVDetDataset(Dataset):
         self.img_std = np.array(img_conf['img_std'], np.float32)
         self.to_rgb = img_conf['to_rgb']
         self.return_depth = return_depth
+        assert sum([sweep_idx >= 0 for sweep_idx in sweep_idxes]) \
+            == len(sweep_idxes), 'All `sweep_idxes` must greater \
+                than or equal to 0.'
+
         self.sweeps_idx = sweep_idxes
+        assert sum([key_idx < 0 for key_idx in key_idxes]) == len(key_idxes),\
+            'All `key_idxes` must less than 0.'
+        self.key_idxes = [0] + key_idxes
 
     def _get_sample_indices(self):
         """Load annotations from ann_file.
@@ -487,22 +497,32 @@ class NuscMVDetDataset(Dataset):
     def __getitem__(self, idx):
         if self.use_cbgs:
             idx = self.sample_indices[idx]
-        info = self.infos[idx]
-        cam_infos = [self.infos[idx]['cam_infos']]
+        cam_infos = list()
         # TODO: Check if it still works when number of cameras is reduced.
         cams = self.choose_cams()
-        for sweep_idx in self.sweeps_idx:
-            if len(info['sweeps']) == 0:
-                cam_infos.append(info['cam_infos'])
-            else:
-                # Handle scenarios when current sweep doesn't have all
-                # cam keys.
-                for i in range(min(len(info['sweeps']) - 1, sweep_idx), -1,
-                               -1):
-                    if sum([cam in info['sweeps'][i]
-                            for cam in cams]) == len(cams):
-                        cam_infos.append(info['sweeps'][i])
-                        break
+        for key_idx in self.key_idxes:
+            cur_idx = key_idx + idx
+            # Handle scenarios when current idx doesn't have previous key
+            # frame or previous key frame is from another scene.
+            if cur_idx < 0:
+                cur_idx = idx
+            elif self.infos[cur_idx]['scene_token'] != self.infos[idx][
+                    'scene_token']:
+                cur_idx = idx
+            info = self.infos[cur_idx]
+            cam_infos.append(info['cam_infos'])
+            for sweep_idx in self.sweeps_idx:
+                if len(info['sweeps']) == 0:
+                    cam_infos.append(info['cam_infos'])
+                else:
+                    # Handle scenarios when current sweep doesn't have all
+                    # cam keys.
+                    for i in range(min(len(info['sweeps']) - 1, sweep_idx), -1,
+                                   -1):
+                        if sum([cam in info['sweeps'][i]
+                                for cam in cams]) == len(cams):
+                            cam_infos.append(info['sweeps'][i])
+                            break
         image_data_list = self.get_image(cam_infos, cams)
         ret_list = list()
         (
@@ -514,9 +534,9 @@ class NuscMVDetDataset(Dataset):
             sweep_timestamps,
             img_metas,
         ) = image_data_list[:7]
-        img_metas['token'] = info['sample_token']
+        img_metas['token'] = self.infos[idx]['sample_token']
         if self.is_train:
-            gt_boxes, gt_labels = self.get_gt(info, cams)
+            gt_boxes, gt_labels = self.get_gt(self.infos[idx], cams)
         # Temporary solution for test.
         else:
             gt_boxes = sweep_imgs.new_zeros(0, 7)
