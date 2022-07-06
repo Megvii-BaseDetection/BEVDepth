@@ -245,20 +245,9 @@ class DepthNet(nn.Module):
 
 
 class LSSFPN(nn.Module):
-    def __init__(
-        self,
-        x_bound,
-        y_bound,
-        z_bound,
-        d_bound,
-        final_dim,
-        downsample_factor,
-        output_channels,
-        img_backbone_conf,
-        img_neck_conf,
-        depth_net_conf,
-        timestamp_net_conf=None,
-    ):
+    def __init__(self, x_bound, y_bound, z_bound, d_bound, final_dim,
+                 downsample_factor, output_channels, img_backbone_conf,
+                 img_neck_conf, depth_net_conf):
         """Modified from `https://github.com/nv-tlabs/lift-splat-shoot`.
 
         Args:
@@ -274,15 +263,12 @@ class LSSFPN(nn.Module):
             img_backbone_conf (dict): Config for image backbone.
             img_neck_conf (dict): Config for image neck.
             depth_net_conf (dict): Config for depth net.
-            timestamp_net_conf (dict): Config for timestamp net.
-                Default: None.
         """
 
         super(LSSFPN, self).__init__()
         self.downsample_factor = downsample_factor
         self.d_bound = d_bound
         self.final_dim = final_dim
-        self.timestamp_net_conf = timestamp_net_conf
         self.output_channels = output_channels
 
         self.register_buffer(
@@ -303,18 +289,9 @@ class LSSFPN(nn.Module):
         self.img_backbone = build_backbone(img_backbone_conf)
         self.img_neck = build_neck(img_neck_conf)
         self.depth_net = self._configure_depth_net(depth_net_conf)
-        self.timestamp_net = self._configure_timestamp_net()
 
         self.img_neck.init_weights()
         self.img_backbone.init_weights()
-
-    def _configure_timestamp_net(self):
-        if self.timestamp_net_conf is not None:
-            timestamp_net = nn.Linear(self.timestamp_net_conf['in_channels'],
-                                      self.timestamp_net_conf['out_channels'])
-        else:
-            timestamp_net = None
-        return timestamp_net
 
     def _configure_depth_net(self, depth_net_conf):
         return DepthNet(
