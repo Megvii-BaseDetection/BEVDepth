@@ -404,6 +404,30 @@ class LSSFPN(nn.Module):
                               sweep_imgs,
                               mats_dict,
                               is_return_depth=False):
+        """Forward function for single sweep.
+
+        Args:
+            sweep_index (int): Index of sweeps.
+            sweep_imgs (Tensor): Input images.
+            mats_dict (dict):
+                sensor2ego_mats(Tensor): Transformation matrix from
+                    camera to ego with shape of (B, num_sweeps,
+                    num_cameras, 4, 4).
+                intrin_mats(Tensor): Intrinsic matrix with shape
+                    of (B, num_sweeps, num_cameras, 4, 4).
+                ida_mats(Tensor): Transformation matrix for ida with
+                    shape of (B, num_sweeps, num_cameras, 4, 4).
+                sensor2sensor_mats(Tensor): Transformation matrix
+                    from key frame camera to sweep frame camera with
+                    shape of (B, num_sweeps, num_cameras, 4, 4).
+                bda_mat(Tensor): Rotation matrix for bda with shape
+                    of (B, 4, 4).
+            is_return_depth (bool, optional): Whether to return depth.
+                Default: False.
+
+        Returns:
+            Tensor: BEV feature map.
+        """
         batch_size, num_sweeps, num_cams, num_channels, img_height, \
             img_width = sweep_imgs.shape
         img_feats = self.get_cam_feats(sweep_imgs)

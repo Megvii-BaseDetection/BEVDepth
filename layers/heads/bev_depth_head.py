@@ -1,3 +1,4 @@
+"""Inherited from `https://github.com/open-mmlab/mmdetection3d/blob/master/mmdet3d/models/dense_heads/centerpoint_head.py`"""  # noqa
 import torch
 from mmdet3d.core import draw_heatmap_gaussian, gaussian_radius
 from mmdet3d.models.dense_heads.centerpoint_head import CenterHead
@@ -27,7 +28,7 @@ bev_neck_conf = dict(type='SECONDFPN',
 
 
 class BEVDepthHead(CenterHead):
-    """Head for BevDet.
+    """Head for BevDepth.
 
     Args:
         in_channels(int): Number of channels after bev_neck.
@@ -82,6 +83,15 @@ class BEVDepthHead(CenterHead):
 
     @autocast(False)
     def forward(self, x):
+        """Forward pass.
+
+        Args:
+            feats (list[torch.Tensor]): Multi-level features, e.g.,
+                features produced by FPN.
+
+        Returns:
+            tuple(list[dict]): Output results for tasks.
+        """
         # FPN
         trunk_outs = [x]
         if self.trunk.deep_stem:
@@ -243,7 +253,7 @@ class BEVDepthHead(CenterHead):
         return heatmaps, anno_boxes, inds, masks
 
     def loss(self, targets, preds_dicts, **kwargs):
-        """Loss function for CenterHead.
+        """Loss function for BEVDepthHead.
 
         Args:
             gt_bboxes_3d (list[:obj:`LiDARInstance3DBoxes`]): Ground
@@ -301,6 +311,15 @@ class BEVDepthHead(CenterHead):
         return return_loss
 
     def get_bboxes(self, preds_dicts, img_metas=None, img=None, rescale=False):
+        """Generate bboxes from bbox head predictions.
+
+        Args:
+            preds_dicts (tuple[list[dict]]): Prediction results.
+            img_metas (list[dict]): Point cloud and image's meta info.
+
+        Returns:
+            list[dict]: Decoded bbox, scores and labels after nms.
+        """
         return super().get_bboxes(preds_dicts,
                                   img_metas,
                                   img=img,
