@@ -363,8 +363,7 @@ class Exp(BaseExp):
             bda_aug_conf=self.bda_aug_conf,
             classes=self.class_names,
             data_root=self.data_root,
-            info_path='data/nuScenes/12hz/\
-                nuscenes_12hz_infos_val.pkl',
+            info_path='data/nuScenes/12hz/nuscenes_12hz_infos_val.pkl',
             is_train=False,
             use_cbgs=self.data_use_cbgs,
             img_conf=self.img_conf,
