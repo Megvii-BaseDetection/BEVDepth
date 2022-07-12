@@ -1,27 +1,18 @@
 '''Modified from # https://github.com/nutonomy/nuscenes-devkit/blob/57889ff20678577025326cfc24e57424a829be0a/python-sdk/nuscenes/eval/detection/evaluate.py#L222 # noqa
 '''
-import os
 import os.path as osp
 import tempfile
-from typing import Sequence
 
 import mmcv
 import numpy as np
 import pyquaternion
 from nuscenes.utils.data_classes import Box
-from perceptron.engine.callbacks import Callback
-from perceptron.engine.executors import BaseExecutor
-# TODO: Change to exp in BEVDepth
-from perceptron.exps.base_exp import BaseExp
 from pyquaternion import Quaternion
-from tqdm import tqdm
-
-from utils import torch_dist
 
 __all__ = ['DetMVNuscEvaluator']
 
 
-class DetMVNuscEvaluator(BaseExecutor):
+class DetMVNuscEvaluator():
     ErrNameMapping = {
         'trans_err': 'mATE',
         'scale_err': 'mASE',
@@ -45,9 +36,7 @@ class DetMVNuscEvaluator(BaseExecutor):
 
     def __init__(
         self,
-        exp=BaseExp,
-        callbacks=Sequence['Callback'],
-        logger=None,
+        class_names,
         eval_version='detection_cvpr_2019',
         data_root='./data/nuScenes',
         version='v1.0-trainval',
@@ -58,7 +47,6 @@ class DetMVNuscEvaluator(BaseExecutor):
                       use_external=False),
         output_dir=None,
     ) -> None:
-        super(DetMVNuscEvaluator, self).__init__(exp, callbacks, logger)
         self.eval_version = eval_version
         self.data_root = data_root
         if self.eval_version is not None:
@@ -66,16 +54,9 @@ class DetMVNuscEvaluator(BaseExecutor):
 
             self.eval_detection_configs = config_factory(self.eval_version)
         self.version = version
-        self.class_names = exp.class_names
+        self.class_names = class_names
         self.modality = modality
-        self.mode = exp.mode
-        assert self.mode in ['valid', 'test']
-        output_dir = os.path.split(logger._core.handlers[1]._name)[0][1:]
         self.output_dir = output_dir
-
-    @property
-    def test_dataloader(self):
-        return self.exp.test_dataloader
 
     def _evaluate_single(self,
                          result_path,
@@ -225,46 +206,15 @@ class DetMVNuscEvaluator(BaseExecutor):
         result_files, tmp_dir = self.format_results(results, img_metas,
                                                     result_names,
                                                     jsonfile_prefix)
-        if self.mode == 'valid':
-            if isinstance(result_files, dict):
-                for name in result_names:
-                    print('Evaluating bboxes of {}'.format(name))
-                    self._evaluate_single(result_files[name])
-            elif isinstance(result_files, str):
-                self._evaluate_single(result_files)
+        if isinstance(result_files, dict):
+            for name in result_names:
+                print('Evaluating bboxes of {}'.format(name))
+                self._evaluate_single(result_files[name])
+        elif isinstance(result_files, str):
+            self._evaluate_single(result_files)
 
         if tmp_dir is not None:
             tmp_dir.cleanup()
-
-    def eval(self, sigma=1e-6):
-        exp = self.exp
-        if self.mode == 'valid':
-            self.val_iter = iter(self.val_dataloader)
-            dataloader = self.val_dataloader
-        else:
-            self.val_iter = iter(self.test_dataloader)
-            dataloader = self.test_dataloader
-        self._invoke_callback('before_eval')
-        self.model.cuda()
-        self.model.eval()
-        all_results = list()
-        all_img_metas = list()
-        for i in tqdm(range(len(dataloader))):
-            batch = next(self.val_iter)
-            # results, gt_boxes, gt_labels = exp.test_step(data)
-            img_metas, _, _ = batch[-3:]
-            results = exp.test_step(batch)
-            all_results.extend(results)
-            all_img_metas.extend(img_metas)
-        torch_dist.synchronize()
-        all_results = sum(
-            map(list, zip(*torch_dist.all_gather_object(all_results))),
-            [])[:len(dataloader.dataset)]
-        all_img_metas = sum(
-            map(list, zip(*torch_dist.all_gather_object(all_img_metas))),
-            [])[:len(dataloader.dataset)]
-        if torch_dist.get_rank() == 0:
-            self.evaluate(all_results, all_img_metas)
 
     def _format_bbox(self, results, img_metas, jsonfile_prefix=None):
         """Convert the results to the standard format.

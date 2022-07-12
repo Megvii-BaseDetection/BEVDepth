@@ -27,6 +27,7 @@ from torch.cuda.amp.autocast_mode import autocast
 from dataset.nusc_mv_det_dataset import NuscMVDetDataset, collate_fn
 from evaluators.det_mv_evaluators import DetMVNuscEvaluator
 from models.bev_depth import BEVDepth
+from utils.torch_dist import all_gather_object, get_rank, synchronize
 
 H = 900
 W = 1600
@@ -199,16 +200,13 @@ class BEVDepthLightningModel(LightningModule):
                  gpus: int = 1,
                  data_root='data/nuScenes',
                  eval_interval=1,
-                 batch_size_per_device=2,
-                 max_epoch=24,
+                 batch_size_per_device=8,
                  class_names=CLASSES,
                  backbone_conf=backbone_conf,
                  head_conf=head_conf,
                  ida_aug_conf=ida_aug_conf,
                  bda_aug_conf=bda_aug_conf,
-                 pos_weight=2.13,
-                 max_grad_norm=5.0,
-                 dump_interval=1,
+                 default_root_dir='./outputs/',
                  **kwargs):
         super().__init__()
         self.save_hyperparameters()
@@ -216,16 +214,15 @@ class BEVDepthLightningModel(LightningModule):
         self.eval_interval = eval_interval
         self.batch_size_per_device = batch_size_per_device
         self.data_root = data_root
-        self.pos_weight = pos_weight
         self.basic_lr_per_img = 2e-4 / 64
         self.class_names = class_names
         self.backbone_conf = backbone_conf
         self.head_conf = head_conf
         self.ida_aug_conf = ida_aug_conf
         self.bda_aug_conf = bda_aug_conf
-        self.grad_clip_value = max_grad_norm
-        self.dump_interval = dump_interval
-        self.eval_executor_class = DetMVNuscEvaluator
+        self.default_root_dir = default_root_dir
+        self.evaluator = DetMVNuscEvaluator(class_names=self.class_names,
+                                            output_dir=self.default_root_dir)
         self.model = BEVDepth(self.backbone_conf,
                               self.head_conf,
                               is_train_depth=True)
@@ -336,10 +333,38 @@ class BEVDepthLightningModel(LightningModule):
             results[i][0] = results[i][0].tensor.detach().cpu().numpy()
             results[i][1] = results[i][1].detach().cpu().numpy()
             results[i][2] = results[i][2].detach().cpu().numpy()
+            results[i].append(img_metas[i])
         return results
 
     def validation_step(self, batch, batch_idx):
         return self.eval_step(batch, batch_idx, 'val')
+
+    def validation_epoch_end(self, validation_step_outputs):
+        all_pred_results = list()
+        all_img_metas = list()
+        for validation_step_output in validation_step_outputs:
+            for i in range(len(validation_step_output)):
+                all_pred_results.append(validation_step_output[i][:3])
+                all_img_metas.append(validation_step_output[i][3])
+        self.evaluator.evaluate(all_pred_results, all_img_metas)
+
+    def test_epoch_end(self, test_step_outputs):
+        all_pred_results = list()
+        all_img_metas = list()
+        for validation_step_output in test_step_outputs:
+            for i in range(len(validation_step_output)):
+                all_pred_results.append(validation_step_output[i][:3])
+                all_img_metas.append(validation_step_output[i][3])
+        synchronize()
+        # TODO: Change another way.
+        dataset_length = len(self.val_dataloader().dataset)
+        all_pred_results = sum(
+            map(list, zip(*all_gather_object(all_pred_results))),
+            [])[:dataset_length]
+        all_img_metas = sum(map(list, zip(*all_gather_object(all_img_metas))),
+                            [])[:dataset_length]
+        if get_rank() == 0:
+            self.evaluator.evaluate(all_pred_results, all_img_metas)
 
     @staticmethod
     def __accuracy(output, target, topk=(1, )):
@@ -374,7 +399,7 @@ class BEVDepthLightningModel(LightningModule):
             bda_aug_conf=self.bda_aug_conf,
             classes=self.class_names,
             data_root=self.data_root,
-            info_path='data/nuScenes/12hz/nuscenes_12hz_infos_train.pkl',
+            info_path='data/nuScenes/nuscenes_12hz_infos_train.pkl',
             is_train=True,
             use_cbgs=self.data_use_cbgs,
             img_conf=self.img_conf,
@@ -455,10 +480,14 @@ def run_cli():
                                dest='evaluate',
                                action='store_true',
                                help='evaluate model on validation set')
+    parent_parser.add_argument('-b', '--batch_size_per_device', type=int)
     parent_parser.add_argument('--seed',
                                type=int,
                                default=42,
                                help='seed for initializing training.')
+    parent_parser.add_argument('--default-root-dir',
+                               type=str,
+                               default='./outputs')
     parent_parser.add_argument('--ckpt_path', type=str)
     parser = BEVDepthLightningModel.add_model_specific_args(parent_parser)
     parser.set_defaults(profiler='simple',
@@ -470,5 +499,4 @@ def run_cli():
 
 
 if __name__ == '__main__':
-    torch.backends.cudnn.deterministic = False
     run_cli()
