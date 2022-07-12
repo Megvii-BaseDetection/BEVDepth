@@ -24,6 +24,7 @@ import torchvision.models as models
 from pytorch_lightning.core import LightningModule
 from torch.cuda.amp.autocast_mode import autocast
 
+from callbacks.ema import EMACallback
 from dataset.nusc_mv_det_dataset import NuscMVDetDataset, collate_fn
 from evaluators.det_mv_evaluators import DetMVNuscEvaluator
 from models.bev_depth import BEVDepth
@@ -346,15 +347,23 @@ class BEVDepthLightningModel(LightningModule):
             for i in range(len(validation_step_output)):
                 all_pred_results.append(validation_step_output[i][:3])
                 all_img_metas.append(validation_step_output[i][3])
-        self.evaluator.evaluate(all_pred_results, all_img_metas)
+        synchronize()
+        len_dataset = len(self.val_dataloader().dataset)
+        all_pred_results = sum(
+            map(list, zip(*all_gather_object(all_pred_results))),
+            [])[:len_dataset]
+        all_img_metas = sum(map(list, zip(*all_gather_object(all_img_metas))),
+                            [])[:len_dataset]
+        if get_rank() == 0:
+            self.evaluator.evaluate(all_pred_results, all_img_metas)
 
     def test_epoch_end(self, test_step_outputs):
         all_pred_results = list()
         all_img_metas = list()
-        for validation_step_output in test_step_outputs:
-            for i in range(len(validation_step_output)):
-                all_pred_results.append(validation_step_output[i][:3])
-                all_img_metas.append(validation_step_output[i][3])
+        for test_step_output in test_step_outputs:
+            for i in range(len(test_step_output)):
+                all_pred_results.append(test_step_output[i][:3])
+                all_img_metas.append(test_step_output[i][3])
         synchronize()
         # TODO: Change another way.
         dataset_length = len(self.val_dataloader().dataset)
@@ -365,25 +374,6 @@ class BEVDepthLightningModel(LightningModule):
                             [])[:dataset_length]
         if get_rank() == 0:
             self.evaluator.evaluate(all_pred_results, all_img_metas)
-
-    @staticmethod
-    def __accuracy(output, target, topk=(1, )):
-        """Computes the accuracy over the k top predictions for the
-        specified values of k."""
-        with torch.no_grad():
-            maxk = max(topk)
-            batch_size = target.size(0)
-
-            _, pred = output.topk(maxk, 1, True, True)
-            pred = pred.t()
-            correct = pred.eq(target.view(1, -1).expand_as(pred))
-
-            res = []
-            for k in topk:
-                correct_k = correct[:k].reshape(-1).float().sum(0,
-                                                                keepdim=True)
-                res.append(correct_k.mul_(100.0 / batch_size))
-            return res
 
     def configure_optimizers(self):
         lr = self.basic_lr_per_img * \
@@ -399,7 +389,7 @@ class BEVDepthLightningModel(LightningModule):
             bda_aug_conf=self.bda_aug_conf,
             classes=self.class_names,
             data_root=self.data_root,
-            info_path='data/nuScenes/nuscenes_12hz_infos_train.pkl',
+            info_path='data/nuScenes/12hz/nuscenes_12hz_infos_train.pkl',
             is_train=True,
             use_cbgs=self.data_use_cbgs,
             img_conf=self.img_conf,
@@ -413,7 +403,7 @@ class BEVDepthLightningModel(LightningModule):
         train_loader = torch.utils.data.DataLoader(
             train_dataset,
             batch_size=self.batch_size_per_device,
-            num_workers=8,
+            num_workers=4,
             drop_last=True,
             shuffle=False,
             collate_fn=partial(collate_fn,
@@ -463,13 +453,13 @@ def main(args: Namespace) -> None:
         pl.seed_everything(args.seed)
 
     model = BEVDepthLightningModel(**vars(args))
-    train_dataloaders = model.train_dataloader()
-    trainer = pl.Trainer.from_argparse_args(args)
-
+    test_dataloader = model.test_dataloader()
+    ema_callback = EMACallback(len(test_dataloader.dataset) * args.max_epochs)
+    trainer = pl.Trainer.from_argparse_args(args, callbacks=[ema_callback])
     if args.evaluate:
         trainer.test(model, ckpt_path=args.ckpt_path)
     else:
-        trainer.fit(model, train_dataloaders)
+        trainer.fit(model)
 
 
 def run_cli():
@@ -480,6 +470,8 @@ def run_cli():
                                dest='evaluate',
                                action='store_true',
                                help='evaluate model on validation set')
+    # parent_parser.add_argument('--stochastic_weight_avg',
+    #                            action='store_true')
     parent_parser.add_argument('-b', '--batch_size_per_device', type=int)
     parent_parser.add_argument('--seed',
                                type=int,
@@ -492,8 +484,9 @@ def run_cli():
     parser = BEVDepthLightningModel.add_model_specific_args(parent_parser)
     parser.set_defaults(profiler='simple',
                         deterministic=False,
-                        max_epochs=90,
-                        accelerator='ddp')
+                        max_epochs=24,
+                        accelerator='ddp',
+                        num_sanity_val_steps=0)
     args = parser.parse_args()
     main(args)
 
