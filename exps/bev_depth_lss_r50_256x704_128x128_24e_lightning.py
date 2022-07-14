@@ -215,7 +215,7 @@ class BEVDepthLightningModel(LightningModule):
         self.eval_interval = eval_interval
         self.batch_size_per_device = batch_size_per_device
         self.data_root = data_root
-        self.basic_lr_per_img = 2e-4 / 64
+        self.basic_lr_per_img = 20e-4 / 64
         self.class_names = class_names
         self.backbone_conf = backbone_conf
         self.head_conf = head_conf
@@ -241,8 +241,8 @@ class BEVDepthLightningModel(LightningModule):
         self.depth_channels = int(
             (self.dbound[1] - self.dbound[0]) / self.dbound[2])
 
-    def forward(self, x):
-        return self.model(x)
+    def forward(self, sweep_imgs, mats):
+        return self.model(sweep_imgs, mats)
 
     def training_step(self, batch):
         (sweep_imgs, mats, _, _, gt_boxes, gt_labels, depth_labels) = batch
@@ -252,7 +252,7 @@ class BEVDepthLightningModel(LightningModule):
             sweep_imgs = sweep_imgs.cuda()
             gt_boxes = [gt_box.cuda() for gt_box in gt_boxes]
             gt_labels = [gt_label.cuda() for gt_label in gt_labels]
-        preds, depth_preds = self.model(sweep_imgs, mats)
+        preds, depth_preds = self(sweep_imgs, mats)
         if isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
             targets = self.model.module.get_targets(gt_boxes, gt_labels)
             loss = self.model.module.loss(targets, preds)
@@ -381,7 +381,7 @@ class BEVDepthLightningModel(LightningModule):
         optimizer = torch.optim.AdamW(self.model.parameters(),
                                       lr=lr,
                                       weight_decay=1e-7)
-        return optimizer
+        return [optimizer]
 
     def train_dataloader(self):
         train_dataset = NuscMVDetDataset(
@@ -453,8 +453,8 @@ def main(args: Namespace) -> None:
         pl.seed_everything(args.seed)
 
     model = BEVDepthLightningModel(**vars(args))
-    test_dataloader = model.test_dataloader()
-    ema_callback = EMACallback(len(test_dataloader.dataset) * args.max_epochs)
+    train_dataloader = model.train_dataloader()
+    ema_callback = EMACallback(len(train_dataloader.dataset) * args.max_epochs)
     trainer = pl.Trainer.from_argparse_args(args, callbacks=[ema_callback])
     if args.evaluate:
         trainer.test(model, ckpt_path=args.ckpt_path)
@@ -475,7 +475,7 @@ def run_cli():
     parent_parser.add_argument('-b', '--batch_size_per_device', type=int)
     parent_parser.add_argument('--seed',
                                type=int,
-                               default=42,
+                               default=0,
                                help='seed for initializing training.')
     parent_parser.add_argument('--default-root-dir',
                                type=str,
@@ -486,7 +486,11 @@ def run_cli():
                         deterministic=False,
                         max_epochs=24,
                         accelerator='ddp',
-                        num_sanity_val_steps=0)
+                        num_sanity_val_steps=0,
+                        gradient_clip_value=5,
+                        limit_val_batches=0,
+                        enable_checkpointing=False,
+                        precision=32)
     args = parser.parse_args()
     main(args)
 

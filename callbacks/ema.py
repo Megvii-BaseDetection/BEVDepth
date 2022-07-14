@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) 2014-2021 Megvii Inc. All rights reserved.
 import math
+import os
 from copy import deepcopy
 
 import torch
@@ -93,3 +94,20 @@ class EMACallback(Callback):
                            batch_idx,
                            unused=0):
         trainer.ema_model.update(trainer, trainer.model.module.module.model)
+
+    def on_train_epoch_end(self, trainer, pl_module) -> None:
+        state_dict = trainer.ema_model.ema.state_dict()
+        state_dict_keys = list(state_dict.keys())
+        for state_dict_key in state_dict_keys:
+            new_key = 'model.' + state_dict_key
+            state_dict[new_key] = state_dict.pop(state_dict_key)
+        checkpoint = {
+            # the epoch and global step are saved for
+            # compatibility but they are not relevant for restoration
+            'epoch': trainer.current_epoch,
+            'global_step': trainer.global_step,
+            'state_dict': state_dict
+        }
+        torch.save(
+            checkpoint,
+            os.path.join(trainer.log_dir, f'{trainer.current_epoch}.pth'))
