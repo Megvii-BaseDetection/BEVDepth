@@ -1,18 +1,34 @@
+# Copyright The PyTorch Lightning team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from argparse import ArgumentParser, Namespace
+
+import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
-from perceptron.engine.cli import BaseCli
-from perceptron.engine.executors.exports.bevdet_exports import BevDetExports
-from perceptron.layers.lr_scheduler import StepLRScheduler
+import torch.nn.parallel
+import torch.utils.data
+import torch.utils.data.distributed
+import torchvision.models as models
+from pytorch_lightning.core import LightningModule
 from torch.cuda.amp.autocast_mode import autocast
-from torch.utils.data import DistributedSampler
 
+from callbacks.ema import EMACallback
 from dataset.nusc_mv_det_dataset import NuscMVDetDataset, collate_fn
 from evaluators.det_mv_evaluators import DetMVNuscEvaluator
-from exps.base_exp import BaseExp
 from models.bev_depth import BEVDepth
-from utils import torch_dist as dist
-
-__all__ = ['Exp']
+from utils.torch_dist import all_gather_object, get_rank, synchronize
 
 H = 900
 W = 1600
@@ -176,38 +192,41 @@ head_conf = {
 }
 
 
-class Exp(BaseExp):
+class BEVDepthLightningModel(LightningModule):
+    MODEL_NAMES = sorted(name for name in models.__dict__
+                         if name.islower() and not name.startswith('__')
+                         and callable(models.__dict__[name]))
+
     def __init__(self,
+                 gpus: int = 1,
                  data_root='data/nuScenes',
                  eval_interval=1,
                  batch_size_per_device=8,
-                 total_devices=1,
-                 max_epoch=24,
                  class_names=CLASSES,
                  backbone_conf=backbone_conf,
                  head_conf=head_conf,
                  ida_aug_conf=ida_aug_conf,
                  bda_aug_conf=bda_aug_conf,
-                 pos_weight=2.13,
-                 max_grad_norm=5.0,
-                 dump_interval=1,
+                 default_root_dir='./outputs/',
                  **kwargs):
-        super(Exp, self).__init__(batch_size_per_device, total_devices,
-                                  max_epoch)
+        super().__init__()
+        self.save_hyperparameters()
+        self.gpus = gpus
         self.eval_interval = eval_interval
+        self.batch_size_per_device = batch_size_per_device
         self.data_root = data_root
-        self.pos_weight = pos_weight
         self.basic_lr_per_img = 2e-4 / 64
         self.class_names = class_names
         self.backbone_conf = backbone_conf
         self.head_conf = head_conf
         self.ida_aug_conf = ida_aug_conf
         self.bda_aug_conf = bda_aug_conf
-        self.grad_clip_value = max_grad_norm
-        self.dump_interval = dump_interval
-        self.eval_executor_class = DetMVNuscEvaluator
-        self.export_executor_class = BevDetExports
-        self.model_class = BEVDepth
+        self.default_root_dir = default_root_dir
+        self.evaluator = DetMVNuscEvaluator(class_names=self.class_names,
+                                            output_dir=self.default_root_dir)
+        self.model = BEVDepth(self.backbone_conf,
+                              self.head_conf,
+                              is_train_depth=True)
         self.mode = 'valid'
         self.img_conf = img_conf
         self.data_use_cbgs = False
@@ -222,6 +241,9 @@ class Exp(BaseExp):
         self.depth_channels = int(
             (self.dbound[1] - self.dbound[0]) / self.dbound[2])
 
+    def forward(self, sweep_imgs, mats):
+        return self.model(sweep_imgs, mats)
+
     def training_step(self, batch):
         (sweep_imgs, mats, _, _, gt_boxes, gt_labels, depth_labels) = batch
         if torch.cuda.is_available():
@@ -230,7 +252,7 @@ class Exp(BaseExp):
             sweep_imgs = sweep_imgs.cuda()
             gt_boxes = [gt_box.cuda() for gt_box in gt_boxes]
             gt_labels = [gt_label.cuda() for gt_label in gt_labels]
-        preds, depth_preds = self.model(sweep_imgs, mats)
+        preds, depth_preds = self(sweep_imgs, mats)
         if isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
             targets = self.model.module.get_targets(gt_boxes, gt_labels)
             loss = self.model.module.loss(targets, preds)
@@ -297,7 +319,7 @@ class Exp(BaseExp):
 
         return gt_depths.float()
 
-    def test_step(self, batch):
+    def eval_step(self, batch, batch_idx, prefix: str):
         (sweep_imgs, mats, _, img_metas, _, _) = batch
         if torch.cuda.is_available():
             for key, value in mats.items():
@@ -312,22 +334,57 @@ class Exp(BaseExp):
             results[i][0] = results[i][0].tensor.detach().cpu().numpy()
             results[i][1] = results[i][1].detach().cpu().numpy()
             results[i][2] = results[i][2].detach().cpu().numpy()
+            results[i].append(img_metas[i])
         return results
 
-    def _configure_callbacks(self):
-        callbacks_list = list()
-        if self.model_use_ema:
-            from perceptron.engine.callbacks.model_ema_callback import \
-                EMACallback
+    def validation_step(self, batch, batch_idx):
+        return self.eval_step(batch, batch_idx, 'val')
 
-            callbacks_list.extend([EMACallback()])
-        return callbacks_list
+    def validation_epoch_end(self, validation_step_outputs):
+        all_pred_results = list()
+        all_img_metas = list()
+        for validation_step_output in validation_step_outputs:
+            for i in range(len(validation_step_output)):
+                all_pred_results.append(validation_step_output[i][:3])
+                all_img_metas.append(validation_step_output[i][3])
+        synchronize()
+        len_dataset = len(self.val_dataloader().dataset)
+        all_pred_results = sum(
+            map(list, zip(*all_gather_object(all_pred_results))),
+            [])[:len_dataset]
+        all_img_metas = sum(map(list, zip(*all_gather_object(all_img_metas))),
+                            [])[:len_dataset]
+        if get_rank() == 0:
+            self.evaluator.evaluate(all_pred_results, all_img_metas)
 
-    def _configure_train_dataloader(self):
-        from perceptron.data.sampler import InfiniteSampler
+    def test_epoch_end(self, test_step_outputs):
+        all_pred_results = list()
+        all_img_metas = list()
+        for test_step_output in test_step_outputs:
+            for i in range(len(test_step_output)):
+                all_pred_results.append(test_step_output[i][:3])
+                all_img_metas.append(test_step_output[i][3])
+        synchronize()
+        # TODO: Change another way.
+        dataset_length = len(self.val_dataloader().dataset)
+        all_pred_results = sum(
+            map(list, zip(*all_gather_object(all_pred_results))),
+            [])[:dataset_length]
+        all_img_metas = sum(map(list, zip(*all_gather_object(all_img_metas))),
+                            [])[:dataset_length]
+        if get_rank() == 0:
+            self.evaluator.evaluate(all_pred_results, all_img_metas)
 
-        # import pdb; pdb.set_trace()
-        train_data = NuscMVDetDataset(
+    def configure_optimizers(self):
+        lr = self.basic_lr_per_img * \
+            self.batch_size_per_device * self.gpus
+        optimizer = torch.optim.AdamW(self.model.parameters(),
+                                      lr=lr,
+                                      weight_decay=1e-7)
+        return [optimizer]
+
+    def train_dataloader(self):
+        train_dataset = NuscMVDetDataset(
             ida_aug_conf=self.ida_aug_conf,
             bda_aug_conf=self.bda_aug_conf,
             classes=self.class_names,
@@ -344,21 +401,19 @@ class Exp(BaseExp):
         from functools import partial
 
         train_loader = torch.utils.data.DataLoader(
-            train_data,
+            train_dataset,
             batch_size=self.batch_size_per_device,
-            num_workers=8,
+            num_workers=4,
             drop_last=True,
             shuffle=False,
             collate_fn=partial(collate_fn,
                                is_return_depth=self.data_return_depth),
-            sampler=InfiniteSampler(len(train_data),
-                                    seed=self.seed if self.seed else 0)
-            if dist.is_distributed() else None,
+            sampler=None,
         )
         return train_loader
 
-    def _configure_val_dataloader(self):
-        val_data = NuscMVDetDataset(
+    def val_dataloader(self):
+        val_dataset = NuscMVDetDataset(
             ida_aug_conf=self.ida_aug_conf,
             bda_aug_conf=self.bda_aug_conf,
             classes=self.class_names,
@@ -372,81 +427,71 @@ class Exp(BaseExp):
             key_idxes=self.key_idxes,
             return_depth=False,
         )
-        sampler = DistributedSampler(val_data, shuffle=False, drop_last=False)
         val_loader = torch.utils.data.DataLoader(
-            val_data,
+            val_dataset,
             batch_size=self.batch_size_per_device,
             shuffle=False,
             collate_fn=collate_fn,
             num_workers=4,
-            sampler=sampler,
+            sampler=None,
         )
         return val_loader
 
-    def _configure_test_dataloader(self):
-        test_data = NuscMVDetDataset(
-            ida_aug_conf=self.ida_aug_conf,
-            bda_aug_conf=self.bda_aug_conf,
-            classes=self.class_names,
-            data_root=self.data_root,
-            info_path='data/nuScenes/12hz/\
-                nuscenes_12hz_infos_val.pkl',
-            is_train=False,
-            use_cbgs=self.data_use_cbgs,
-            img_conf=self.img_conf,
-            num_sweeps=self.num_sweeps,
-            sweep_idxes=self.sweep_idxes,
-            key_idxes=self.key_idxes,
-            return_depth=False,
-        )
-        sampler = DistributedSampler(test_data, shuffle=False, drop_last=False)
-        test_loader = torch.utils.data.DataLoader(
-            test_data,
-            batch_size=self.batch_size_per_device,
-            shuffle=False,
-            collate_fn=collate_fn,
-            num_workers=4,
-            sampler=sampler,
-        )
-        return test_loader
+    def test_dataloader(self):
+        return self.val_dataloader()
 
-    def _configure_model(self):
-        model = self.model_class(self.backbone_conf,
-                                 self.head_conf,
-                                 is_train_depth=True)
-        return model
+    def test_step(self, batch, batch_idx):
+        return self.eval_step(batch, batch_idx, 'test')
 
-    def _configure_optimizer(self):
-        lr = self.basic_lr_per_img * \
-            self.batch_size_per_device * self.total_devices
-        optimizer = torch.optim.AdamW(self.model.parameters(),
-                                      lr=lr,
-                                      weight_decay=1e-7)
-        return optimizer
+    @staticmethod
+    def add_model_specific_args(parent_parser):  # pragma: no-cover
+        return parent_parser
 
-    def _configure_lr_scheduler(self):
-        # TODO: Finetune training config.
-        if self.model_use_ema:
-            from perceptron.layers.lr_scheduler import ConstantLRScheduler
 
-            scheduler = ConstantLRScheduler(
-                self.optimizer,
-                self.basic_lr_per_img * self.batch_size_per_device *
-                self.total_devices,
-                len(self.train_dataloader),
-                self.max_epoch,
-            )
-        else:
-            scheduler = StepLRScheduler(
-                self.optimizer,
-                self.basic_lr_per_img * self.batch_size_per_device *
-                self.total_devices,
-                len(self.train_dataloader),
-                self.max_epoch,
-                milestones=[19, 23],
-            )
-        return scheduler
+def main(args: Namespace) -> None:
+    if args.seed is not None:
+        pl.seed_everything(args.seed)
+
+    model = BEVDepthLightningModel(**vars(args))
+    train_dataloader = model.train_dataloader()
+    ema_callback = EMACallback(len(train_dataloader.dataset) * args.max_epochs)
+    trainer = pl.Trainer.from_argparse_args(args, callbacks=[ema_callback])
+    if args.evaluate:
+        trainer.test(model, ckpt_path=args.ckpt_path)
+    else:
+        trainer.fit(model)
+
+
+def run_cli():
+    parent_parser = ArgumentParser(add_help=False)
+    parent_parser = pl.Trainer.add_argparse_args(parent_parser)
+    parent_parser.add_argument('-e',
+                               '--evaluate',
+                               dest='evaluate',
+                               action='store_true',
+                               help='evaluate model on validation set')
+    parent_parser.add_argument('-b', '--batch_size_per_device', type=int)
+    parent_parser.add_argument('--seed',
+                               type=int,
+                               default=0,
+                               help='seed for initializing training.')
+    parent_parser.add_argument('--default-root-dir',
+                               type=str,
+                               default='./outputs')
+    parent_parser.add_argument('--ckpt_path', type=str)
+    parser = BEVDepthLightningModel.add_model_specific_args(parent_parser)
+    parser.set_defaults(profiler='simple',
+                        deterministic=False,
+                        max_epochs=24,
+                        accelerator='ddp',
+                        num_sanity_val_steps=0,
+                        gradient_clip_value=5,
+                        limit_val_batches=0,
+                        enable_checkpointing=False,
+                        precision=16)
+    args = parser.parse_args()
+    main(args)
 
 
 if __name__ == '__main__':
-    BaseCli(Exp).run()
+    run_cli()
