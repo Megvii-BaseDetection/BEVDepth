@@ -14,6 +14,7 @@
 
 from argparse import ArgumentParser, Namespace
 
+import mmcv
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
@@ -221,6 +222,7 @@ class BEVDepthLightningModel(LightningModule):
         self.head_conf = head_conf
         self.ida_aug_conf = ida_aug_conf
         self.bda_aug_conf = bda_aug_conf
+        mmcv.mkdir_or_exist(default_root_dir)
         self.default_root_dir = default_root_dir
         self.evaluator = DetMVNuscEvaluator(class_names=self.class_names,
                                             output_dir=self.default_root_dir)
@@ -255,17 +257,18 @@ class BEVDepthLightningModel(LightningModule):
         preds, depth_preds = self(sweep_imgs, mats)
         if isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
             targets = self.model.module.get_targets(gt_boxes, gt_labels)
-            loss = self.model.module.loss(targets, preds)
+            detection_loss = self.model.module.loss(targets, preds)
         else:
             targets = self.model.get_targets(gt_boxes, gt_labels)
-            loss = self.model.loss(targets, preds)
+            detection_loss = self.model.loss(targets, preds)
 
         if len(depth_labels.shape) == 5:
             # only key-frame will calculate depth loss
             depth_labels = depth_labels[:, 0, ...]
         depth_loss = self.get_depth_loss(depth_labels.cuda(), depth_preds)
-
-        return loss + depth_loss
+        self.log('detection_loss', detection_loss)
+        self.log('depth_loss', depth_loss)
+        return detection_loss + depth_loss
 
     def get_depth_loss(self, depth_labels, depth_preds):
         depth_labels = self.get_downsampled_gt_depth(depth_labels)
@@ -475,20 +478,19 @@ def run_cli():
                                type=int,
                                default=0,
                                help='seed for initializing training.')
-    parent_parser.add_argument('--default-root-dir',
-                               type=str,
-                               default='./outputs')
     parent_parser.add_argument('--ckpt_path', type=str)
     parser = BEVDepthLightningModel.add_model_specific_args(parent_parser)
-    parser.set_defaults(profiler='simple',
-                        deterministic=False,
-                        max_epochs=24,
-                        accelerator='ddp',
-                        num_sanity_val_steps=0,
-                        gradient_clip_value=5,
-                        limit_val_batches=0,
-                        enable_checkpointing=False,
-                        precision=16)
+    parser.set_defaults(
+        profiler='simple',
+        deterministic=False,
+        max_epochs=24,
+        accelerator='ddp',
+        num_sanity_val_steps=0,
+        gradient_clip_val=5,
+        limit_val_batches=0,
+        enable_checkpointing=False,
+        precision=16,
+        default_root_dir='./outputs/bev_depth_lss_r50_256x704_128x128_24e')
     args = parser.parse_args()
     main(args)
 

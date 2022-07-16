@@ -98,6 +98,7 @@ class EMACallback(Callback):
     def on_train_epoch_end(self, trainer, pl_module) -> None:
         state_dict = trainer.ema_model.ema.state_dict()
         state_dict_keys = list(state_dict.keys())
+        # TODO: Change to more elegant way.
         for state_dict_key in state_dict_keys:
             new_key = 'model.' + state_dict_key
             state_dict[new_key] = state_dict.pop(state_dict_key)
