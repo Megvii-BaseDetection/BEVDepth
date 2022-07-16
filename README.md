@@ -7,10 +7,6 @@ estimation. For more details, please refer to our [paper on Arxiv](https://arxiv
 ## Updates!!
 * 【2022/06/21】 We have released our paper on [Arxiv](https://arxiv.org/abs/2206.10092).
 
-## Coming soon
-
-## Benchmark
-
 ## Quick Start
 ### Installation
 **Step 0.** Install [pytorch](https://pytorch.org/)(v1.9.0).
@@ -39,11 +35,11 @@ bevdepth
 |   |   ├── v1.0-trainval
 ```
 **Step 1.** Prepare infos.
-bash```
+```
 python gen_info.py
 ```
 **Step 2.** Prepare depth gt.
-bash```
+```
 python gen_depth_gt.py
 ```
 
