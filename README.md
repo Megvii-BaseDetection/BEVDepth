@@ -2,7 +2,7 @@
 BEVDepth is a new 3D object detector with a trustworthy depth
 estimation. For more details, please refer to our [paper on Arxiv](https://arxiv.org/abs/2206.10092).
 
-<img src="assets/vis.png" width="1000" >
+<img src="assets/backbone.png" width="1000" >
 
 ## Updates!!
 * 【2022/06/21】 We have released our paper on [Arxiv](https://arxiv.org/abs/2206.10092).
@@ -41,6 +41,16 @@ python gen_info.py
 **Step 2.** Prepare depth gt.
 ```
 python gen_depth_gt.py
+```
+
+### Tutorials
+**Train.**
+```
+python [EXP_PATH] --amp_backend native -b 8 --gpus 8
+```
+**Eval.**
+```
+python [EXP_PATH] --ckpt_path [CKPT_PATH] -e -b 8 --gpus 8
 ```
 
 ## Cite BEVDepth

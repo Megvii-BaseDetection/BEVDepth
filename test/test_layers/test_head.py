@@ -1,5 +1,6 @@
 import unittest
 
+import pytest
 import torch
 from mmdet3d.core.bbox.structures.lidar_box3d import LiDARInstance3DBoxes
 
@@ -95,6 +96,8 @@ class TestLSSFPN(unittest.TestCase):
         }
         self.bevdet_head = BEVDepthHead(**head_conf).cuda()
 
+    @pytest.mark.skipif(torch.cuda.is_available() is False,
+                        reason='No gpu available.')
     def test_forward(self):
         x = torch.rand(2, 10, 32, 32).cuda()
         ret_results = self.bevdet_head.forward(x)
@@ -106,6 +109,8 @@ class TestLSSFPN(unittest.TestCase):
         assert ret_results[0][0]['vel'].shape == torch.Size([2, 2, 32, 32])
         assert ret_results[0][0]['heatmap'].shape == torch.Size([2, 1, 32, 32])
 
+    @pytest.mark.skipif(torch.cuda.is_available() is False,
+                        reason='No gpu available.')
     def test_get_targets(self):
         gt_boxes_3d_0 = torch.rand(10, 9).cuda()
         gt_boxes_3d_1 = torch.rand(15, 9).cuda()
@@ -126,6 +131,8 @@ class TestLSSFPN(unittest.TestCase):
         assert inds[0].shape == torch.Size([2, 500])
         assert masks[0].shape == torch.Size([2, 500])
 
+    @pytest.mark.skipif(torch.cuda.is_available() is False,
+                        reason='No gpu available.')
     def test_get_bboxes(self):
         x = torch.rand(2, 10, 32, 32).cuda()
         ret_results = self.bevdet_head.forward(x)
