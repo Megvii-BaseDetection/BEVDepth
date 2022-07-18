@@ -104,16 +104,18 @@ def bev_transform(gt_boxes, rotate_angle, scale_ratio, flip_dx, flip_dy):
 
 
 def depth_transform(cam_depth, resize, resize_dims, crop, flip, rotate):
-    """
-    Input:
-        cam_depth: Nx3, 3: x,y,d
-        resize: a float value
-        resize_dims: self.ida_aug_conf["final_dim"] -> [H, W]
-        crop: x1, y1, x2, y2
-        flip: bool value
-        rotate: an angle
-    Output:
-        cam_depth: [h/down_ratio, w/down_ratio, d]
+    """Transform depth based on ida augmentation configuration.
+
+    Args:
+        cam_depth (np array): Nx3, 3: x,y,d.
+        resize (float): Resize factor.
+        resize_dims (list): Final dimension.
+        crop (list): x1, y1, x2, y2
+        flip (bool): Whether to flip.
+        rotate (float): Rotation value.
+
+    Returns:
+        np array: [h/down_ratio, w/down_ratio, d]
     """
 
     H, W = resize_dims
@@ -485,6 +487,11 @@ class NuscMVDetDataset(Dataset):
         return torch.Tensor(gt_boxes), torch.tensor(gt_labels)
 
     def choose_cams(self):
+        """Choose cameras randomly.
+
+        Returns:
+            list: Cameras to be used.
+        """
         if self.is_train and self.ida_aug_conf['Ncams'] < len(
                 self.ida_aug_conf['cams']):
             cams = np.random.choice(self.ida_aug_conf['cams'],
