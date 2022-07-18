@@ -25,7 +25,7 @@ python setup.py develop
 ### Data preparation
 **Step 0.** Download nuScenes official dataset. and symlink the dataset root to `./data/`. The directory will be as follows.
 ```
-bevdepth
+BEVDepth
 ├── data
 │   ├── nuScenes
 │   │   ├── maps

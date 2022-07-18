@@ -34,19 +34,6 @@ def synchronize():
     dist.barrier()
 
 
-def reduce_sum(tensor):
-    world_size = get_world_size()
-    if world_size < 2:
-        return tensor
-    tensor = tensor.clone()
-    dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
-    return tensor
-
-
-def reduce_mean(tensor):
-    return reduce_sum(tensor) / float(get_world_size())
-
-
 def all_gather_object(obj):
     world_size = get_world_size()
     if world_size < 2:
@@ -54,14 +41,6 @@ def all_gather_object(obj):
     output = [None for _ in range(world_size)]
     dist.all_gather_object(output, obj)
     return output
-
-
-def is_distributed() -> bool:
-    if not dist.is_available():
-        return False
-    if not dist.is_initialized():
-        return False
-    return True
 
 
 def is_available() -> bool:
