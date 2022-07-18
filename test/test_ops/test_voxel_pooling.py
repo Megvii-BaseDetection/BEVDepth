@@ -1,12 +1,16 @@
 import unittest
 
+import pytest
+import torch
+
 from ops.voxel_pooling import voxel_pooling
 
 
 class TestLSSFPN(unittest.TestCase):
+    @pytest.mark.skipif(condition=torch.cuda.is_available() is False,
+                        reason='No gpu available.')
     def test_voxel_pooling(self):
         import numpy as np
-        import torch
 
         np.random.seed(0)
         torch.manual_seed(0)

@@ -1,5 +1,6 @@
 import unittest
 
+import pytest
 import torch
 
 from layers.backbones.lss_fpn import LSSFPN
@@ -36,6 +37,8 @@ class TestLSSFPN(unittest.TestCase):
         }
         self.lss_fpn = LSSFPN(**backbone_conf).cuda()
 
+    @pytest.mark.skipif(torch.cuda.is_available() is False,
+                        reason='No gpu available.')
     def test_forward(self):
         sweep_imgs = torch.rand(2, 2, 6, 3, 64, 64).cuda()
         sensor2ego_mats = torch.rand(2, 2, 6, 4, 4).cuda()
