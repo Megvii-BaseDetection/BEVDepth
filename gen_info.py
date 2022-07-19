@@ -1,37 +1,8 @@
-from pathlib import Path
-
 import mmcv
+import numpy as np
 from nuscenes.nuscenes import NuScenes
 from nuscenes.utils import splits
 from tqdm import tqdm
-
-
-def get_available_scenes(nusc):
-    available_scenes = []
-    print('total scene num:', len(nusc.scene))
-    for scene in nusc.scene:
-        scene_token = scene['token']
-        scene_rec = nusc.get('scene', scene_token)
-        sample_rec = nusc.get('sample', scene_rec['first_sample_token'])
-        sd_rec = nusc.get('sample_data', sample_rec['data']['LIDAR_TOP'])
-        has_more_frames = True
-        scene_not_exist = False
-        while has_more_frames:
-            lidar_path, boxes, _ = nusc.get_sample_data(sd_rec['token'])
-            if not Path(lidar_path).exists():
-                scene_not_exist = True
-                break
-            # else:
-            #     break
-            if not sd_rec['next'] == '':
-                sd_rec = nusc.get('sample_data', sd_rec['next'])
-            else:
-                has_more_frames = False
-        if scene_not_exist:
-            continue
-        available_scenes.append(scene)
-    print('exist scene num:', len(available_scenes))
-    return available_scenes
 
 
 def generate_info(nusc, scenes):
@@ -121,7 +92,10 @@ def generate_info(nusc, scenes):
             ann_infos = list()
             for ann in cur_sample['anns']:
                 ann_info = nusc.get('sample_annotation', ann)
-                ann_info['velocity'] = nusc.box_velocity(ann_info['token'])
+                velocity = nusc.box_velocity(ann_info['token'])
+                if np.any(np.isnan(velocity)):
+                    velocity = np.zeros(3)
+                ann_info['velocity'] = velocity
                 ann_infos.append(ann_info)
             info['ann_infos'] = ann_infos
             infos.append(info)
@@ -136,13 +110,8 @@ def main():
     nusc = NuScenes(version='v1.0-trainval',
                     dataroot='./data/nuScenes/',
                     verbose=True)
-    available_scenes = get_available_scenes(nusc)
-    available_scene_names = [s['name'] for s in available_scenes]
     train_scenes = splits.train
     val_scenes = splits.val
-    train_scenes = list(
-        filter(lambda x: x in available_scene_names, train_scenes))
-    val_scenes = list(filter(lambda x: x in available_scene_names, val_scenes))
     train_infos = generate_info(nusc, train_scenes)
     val_infos = generate_info(nusc, val_scenes)
     mmcv.dump(train_infos, './data/nuScenes/nuscenes_12hz_infos_train.pkl')
