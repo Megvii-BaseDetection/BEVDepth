@@ -23,7 +23,13 @@ python setup.py develop
 ```
 
 ### Data preparation
-**Step 0.** Download nuScenes official dataset. and symlink the dataset root to `./data/`. The directory will be as follows.
+**Step 0.** Download nuScenes official dataset.
+
+**Step 1.** Symlink the dataset root to `./data/`.
+```
+ln -s [nuscenes root] ./data/
+```
+The directory will be as follows.
 ```
 BEVDepth
 ├── data
@@ -34,11 +40,11 @@ BEVDepth
 │   │   ├── v1.0-test
 |   |   ├── v1.0-trainval
 ```
-**Step 1.** Prepare infos.
+**Step 2.** Prepare infos.
 ```
 python gen_info.py
 ```
-**Step 2.** Prepare depth gt.
+**Step 3.** Prepare depth gt.
 ```
 python gen_depth_gt.py
 ```
