@@ -1,3 +1,4 @@
+# Copyright (c) Megvii Inc. All rights reserved.
 from argparse import ArgumentParser, Namespace
 
 import pytorch_lightning as pl

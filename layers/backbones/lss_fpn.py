@@ -1,3 +1,4 @@
+# Copyright (c) Megvii Inc. All rights reserved.
 import torch
 import torch.nn.functional as F
 from mmcv.cnn import build_conv_layer

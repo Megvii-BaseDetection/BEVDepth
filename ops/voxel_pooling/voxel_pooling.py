@@ -1,3 +1,4 @@
+# Copyright (c) Megvii Inc. All rights reserved.
 import torch
 from torch.autograd import Function
 

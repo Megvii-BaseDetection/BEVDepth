@@ -1,3 +1,4 @@
+# Copyright (c) Megvii Inc. All rights reserved.
 """
 mAP: 0.3329
 mATE: 0.6832

@@ -1,3 +1,4 @@
+// Copyright (c) Megvii Inc. All rights reserved.
 #include <THC/THC.h>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
