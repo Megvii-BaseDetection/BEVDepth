@@ -1,0 +1,17 @@
+easydict
+grpcio<=1.43.0
+loguru>=0.5.3
+numba
+numpy
+nuscenes-devkit
+open3d
+opencv-python-headless
+pandas
+pylas
+pytorch-lightning
+scikit-image
+scipy
+tabulate
+tensorboardX
+torch==1.9.0
+torchvision==0.10.0
