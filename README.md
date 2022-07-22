@@ -42,11 +42,11 @@ BEVDepth
 ```
 **Step 2.** Prepare infos.
 ```
-python gen_info.py
+python scripts/gen_info.py
 ```
 **Step 3.** Prepare depth gt.
 ```
-python gen_depth_gt.py
+python scripts/gen_depth_gt.py
 ```
 
 ### Tutorials
