@@ -1,4 +1,4 @@
-## Introduction
+## BEVDepth
 BEVDepth is a new 3D object detector with a trustworthy depth
 estimation. For more details, please refer to our [paper on Arxiv](https://arxiv.org/abs/2206.10092).
 
@@ -59,10 +59,10 @@ python [EXP_PATH] --amp_backend native -b 8 --gpus 8
 python [EXP_PATH] --ckpt_path [CKPT_PATH] -e -b 8 --gpus 8
 ```
 
-###Benchmark
-|Model |Backbone |Resolution |mAP |mATE| mASE | mAOE |mAVE| mAAE | NDS | weights |
-| ------ |:---: | :---:    | :---:       |:---:     |:---:  | :---: | :----: | :----: | :----: | :----: |
-|BEVDepth| R50  | 256x704 | 0.3329 |  0.6832     |0.2761 | 0.5446 | 0.5258 | 0.2259 | 0.4409 | [github](https://github.com/Megvii-BaseDetection/BEVDepth/releases/download/v0.1.0/bev_depth_lss_r50_256x704_128x128_24e_2key.pth) |
+### Benchmark
+|Backbone |mAP |mATE| mASE | mAOE |mAVE| mAAE | NDS | weights |
+| ------ | :---:       |:---:     |:---:  | :---: | :----: | :----: | :----: | :----: |
+|[R50](exps/bev_depth_lss_r50_256x704_128x128_24e_2key.py)| 0.3329 |  0.6832     |0.2761 | 0.5446 | 0.5258 | 0.2259 | 0.4409 | [github](https://github.com/Megvii-BaseDetection/BEVDepth/releases/download/v0.1.0/bev_depth_lss_r50_256x704_128x128_24e_2key.pth) |
 
 ## Cite BEVDepth
 If you use BEVDepth in your research, please cite our work by using the following BibTeX entry:
