@@ -3,7 +3,6 @@ numpy
 nuscenes-devkit
 opencv-python-headless
 pandas
-pylas
 pytorch-lightning
 scikit-image
 scipy
