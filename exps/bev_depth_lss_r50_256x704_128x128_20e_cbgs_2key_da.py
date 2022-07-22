@@ -11,12 +11,12 @@ from layers.heads.bev_depth_head import BEVDepthHead
 from models.bev_depth import BEVDepth as BaseBEVDepth
 
 
-class PCFE(nn.Module):
+class DepthAggregation(nn.Module):
     """
     pixel cloud feature extraction
     """
     def __init__(self, in_channels, mid_channels, out_channels):
-        super(PCFE, self).__init__()
+        super(DepthAggregation, self).__init__()
 
         self.reduce_conv = nn.Sequential(
             nn.Conv2d(in_channels,
@@ -69,12 +69,12 @@ class PCFE(nn.Module):
 class LSSFPN(BaseLSSFPN):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.pcfe = self._configure_pcfe()
+        self.depth_aggregation_net = self._configure_depth_aggregation_net()
 
-    def _configure_pcfe(self):
+    def _configure_depth_aggregation_net(self):
         """build pixel cloud feature extractor"""
-        return PCFE(self.output_channels, self.output_channels,
-                    self.output_channels)
+        return DepthAggregation(self.output_channels, self.output_channels,
+                                self.output_channels)
 
     def _forward_voxel_net(self, img_feat_with_depth):
         # BEVConv2D [n, c, d, h, w] -> [n, h, c, w, d]
@@ -82,8 +82,9 @@ class LSSFPN(BaseLSSFPN):
             0, 3, 1, 4, 2).contiguous()  # [n, c, d, h, w] -> [n, h, c, w, d]
         n, h, c, w, d = img_feat_with_depth.shape
         img_feat_with_depth = img_feat_with_depth.view(-1, c, w, d)
-        img_feat_with_depth = (self.pcfe(img_feat_with_depth).view(
-            n, h, c, w, d).permute(0, 2, 4, 1, 3).contiguous().float())
+        img_feat_with_depth = (
+            self.depth_aggregation_net(img_feat_with_depth).view(
+                n, h, c, w, d).permute(0, 2, 4, 1, 3).contiguous().float())
         return img_feat_with_depth
 
 
