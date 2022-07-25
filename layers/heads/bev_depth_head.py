@@ -309,18 +309,3 @@ class BEVDepthHead(CenterHead):
             return_loss += loss_bbox
             return_loss += loss_heatmap
         return return_loss
-
-    def get_bboxes(self, preds_dicts, img_metas=None, img=None, rescale=False):
-        """Generate bboxes from bbox head predictions.
-
-        Args:
-            preds_dicts (tuple[list[dict]]): Prediction results.
-            img_metas (list[dict]): Point cloud and image's meta info.
-
-        Returns:
-            list[dict]: Decoded bbox, scores and labels after nms.
-        """
-        return super().get_bboxes(preds_dicts,
-                                  img_metas,
-                                  img=img,
-                                  rescale=rescale)
