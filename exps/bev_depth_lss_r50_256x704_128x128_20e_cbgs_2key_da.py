@@ -103,6 +103,7 @@ class BEVDepthLightningModel(BaseBEVDepthLightningModel):
         self.model = BEVDepth(self.backbone_conf,
                               self.head_conf,
                               is_train_depth=True)
+        self.data_use_cbgs = True
 
 
 def main(args: Namespace) -> None:
@@ -136,15 +137,15 @@ def run_cli():
     parser = BEVDepthLightningModel.add_model_specific_args(parent_parser)
     parser.set_defaults(profiler='simple',
                         deterministic=False,
-                        max_epochs=24,
+                        max_epochs=20,
                         accelerator='ddp',
                         num_sanity_val_steps=0,
                         gradient_clip_val=5,
                         limit_val_batches=0,
                         enable_checkpointing=False,
                         precision=16,
-                        default_root_dir='./outputs/bev_depth_lss_r50_256\
-            x704_128x128_20e_cbgs_2key_pcfe')
+                        default_root_dir='./outputs/bev_depth_lss_r50_'
+                        '256x704_128x128_20e_cbgs_2key_da')
     args = parser.parse_args()
     main(args)
 
