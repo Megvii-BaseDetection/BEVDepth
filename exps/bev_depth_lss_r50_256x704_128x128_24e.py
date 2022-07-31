@@ -410,7 +410,6 @@ class BEVDepthLightningModel(LightningModule):
             data_root=self.data_root,
             info_path='data/nuScenes/nuscenes_12hz_infos_val.pkl',
             is_train=False,
-            use_cbgs=self.data_use_cbgs,
             img_conf=self.img_conf,
             num_sweeps=self.num_sweeps,
             sweep_idxes=self.sweep_idxes,
