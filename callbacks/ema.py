@@ -74,12 +74,13 @@ class EMACallback(Callback):
 
         bn_model_list = list()
         bn_model_dist_group_list = list()
-        for model_ref in trainer.model.model.modules():
+        for model_ref in trainer.model.modules():
             if isinstance(model_ref, SyncBatchNorm):
                 bn_model_list.append(model_ref)
                 bn_model_dist_group_list.append(model_ref.process_group)
                 model_ref.process_group = None
-        trainer.ema_model = ModelEMA(trainer.model.model.cuda(), 0.9990)
+        trainer.ema_model = ModelEMA(trainer.model.module.module.model.cuda(),
+                                     0.9990)
 
         for bn_model, dist_group in zip(bn_model_list,
                                         bn_model_dist_group_list):

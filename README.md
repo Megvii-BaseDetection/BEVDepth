@@ -13,7 +13,7 @@ estimation. For more details, please refer to our [paper on Arxiv](https://arxiv
 ### Installation
 **Step 0.** Install [pytorch](https://pytorch.org/)(v1.9.0).
 
-**Step 1.** Install [MMDetection3D](https://github.com/open-mmlab/mmdetection3d)(v0.18.0).
+**Step 1.** Install [MMDetection3D](https://github.com/open-mmlab/mmdetection3d)(v1.0.0rc4).
 
 **Step 2.** Install requirements.
 ```shell

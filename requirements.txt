@@ -3,7 +3,7 @@ numpy
 nuscenes-devkit
 opencv-python-headless
 pandas
-pytorch-lightning==1.5.10
+pytorch-lightning==1.6.0
 scikit-image
 scipy
 tensorboardX
