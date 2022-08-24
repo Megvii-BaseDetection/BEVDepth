@@ -29,7 +29,7 @@ import torch.nn as nn
 from torch.cuda.amp.autocast_mode import autocast
 
 from callbacks.ema import EMACallback
-from exps.bev_depth_lss_r50_256x704_128x128_24e_2key import \
+from exps.bev_depth_lss_r50_256x704_128x128_24e_2key_ema import \
     BEVDepthLightningModel as BaseBEVDepthLightningModel
 from layers.backbones.lss_fpn import LSSFPN as BaseLSSFPN
 from layers.heads.bev_depth_head import BEVDepthHead
