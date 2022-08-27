@@ -1,25 +1,25 @@
 # Copyright (c) Megvii Inc. All rights reserved.
 """
-mAP: 0.3484
-mATE: 0.6159
-mASE: 0.2716
-mAOE: 0.4144
-mAVE: 0.4402
-mAAE: 0.1954
-NDS: 0.4805
-Eval time: 110.7s
+mAP: 0.3589
+mATE: 0.6119
+mASE: 0.2692
+mAOE: 0.5074
+mAVE: 0.4086
+mAAE: 0.2009
+NDS: 0.4797
+Eval time: 183.3s
 Per-class results:
 Object Class    AP      ATE     ASE     AOE     AVE     AAE
-car     0.553   0.480   0.157   0.117   0.386   0.205
-truck   0.252   0.645   0.202   0.097   0.381   0.185
-bus     0.378   0.674   0.197   0.090   0.871   0.298
-trailer 0.163   0.932   0.230   0.409   0.543   0.098
-construction_vehicle    0.076   0.878   0.495   1.015   0.103   0.344
-pedestrian      0.361   0.694   0.300   0.816   0.491   0.247
-motorcycle      0.319   0.569   0.252   0.431   0.552   0.181
-bicycle 0.286   0.457   0.255   0.630   0.194   0.006
-traffic_cone    0.536   0.438   0.339   nan     nan     nan
-barrier 0.559   0.392   0.289   0.124   nan     nan
+car     0.559   0.475   0.157   0.112   0.370   0.205
+truck   0.270   0.659   0.196   0.103   0.356   0.181
+bus     0.374   0.651   0.184   0.072   0.846   0.326
+trailer 0.179   0.963   0.227   0.512   0.294   0.127
+construction_vehicle    0.081   0.825   0.481   1.352   0.094   0.345
+pedestrian      0.363   0.690   0.297   0.831   0.491   0.244
+motorcycle      0.354   0.580   0.255   0.545   0.615   0.164
+bicycle 0.301   0.447   0.280   0.920   0.203   0.015
+traffic_cone    0.539   0.435   0.324   nan     nan     nan
+barrier 0.569   0.394   0.293   0.120   nan     nan
 """
 from argparse import ArgumentParser, Namespace
 
@@ -27,10 +27,9 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 from torch.cuda.amp.autocast_mode import autocast
-from torch.optim.lr_scheduler import MultiStepLR
 
 from callbacks.ema import EMACallback
-from exps.bev_depth_lss_r50_256x704_128x128_24e_2key import \
+from exps.bev_depth_lss_r50_256x704_128x128_24e_2key_ema import \
     BEVDepthLightningModel as BaseBEVDepthLightningModel
 from layers.backbones.lss_fpn import LSSFPN as BaseLSSFPN
 from layers.heads.bev_depth_head import BEVDepthHead
@@ -136,9 +135,8 @@ class BEVDepthLightningModel(BaseBEVDepthLightningModel):
             self.batch_size_per_device * self.gpus
         optimizer = torch.optim.AdamW(self.model.parameters(),
                                       lr=lr,
-                                      weight_decay=1e-7)
-        scheduler = MultiStepLR(optimizer, [16, 19])
-        return [[optimizer], [scheduler]]
+                                      weight_decay=1e-2)
+        return [optimizer]
 
 
 def main(args: Namespace) -> None:
@@ -180,7 +178,7 @@ def run_cli():
                         enable_checkpointing=False,
                         precision=16,
                         default_root_dir='./outputs/bev_depth_lss_r50_'
-                        '256x704_128x128_20e_cbgs_2key_da')
+                        '256x704_128x128_20e_cbgs_2key_da_ema')
     args = parser.parse_args()
     main(args)
 

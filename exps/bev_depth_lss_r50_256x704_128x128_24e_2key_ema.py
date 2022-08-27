@@ -77,18 +77,17 @@ def run_cli():
                                help='seed for initializing training.')
     parent_parser.add_argument('--ckpt_path', type=str)
     parser = BEVDepthLightningModel.add_model_specific_args(parent_parser)
-    parser.set_defaults(
-        profiler='simple',
-        deterministic=False,
-        max_epochs=24,
-        accelerator='ddp',
-        num_sanity_val_steps=0,
-        gradient_clip_val=5,
-        limit_val_batches=0,
-        enable_checkpointing=False,
-        precision=16,
-        default_root_dir='./outputs/bev_depth_lss_r50_256x704_128x128_24e_2key'
-    )
+    parser.set_defaults(profiler='simple',
+                        deterministic=False,
+                        max_epochs=24,
+                        accelerator='ddp',
+                        num_sanity_val_steps=0,
+                        gradient_clip_val=5,
+                        limit_val_batches=0,
+                        enable_checkpointing=False,
+                        precision=16,
+                        default_root_dir='./outputs/bev_depth_lss_r50_256x704_'
+                        '128x128_24e_2key_ema')
     args = parser.parse_args()
     main(args)
 
