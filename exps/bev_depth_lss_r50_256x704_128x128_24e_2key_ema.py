@@ -1,33 +1,32 @@
 # Copyright (c) Megvii Inc. All rights reserved.
 """
-mAP: 0.3304
-mATE: 0.7021
-mASE: 0.2795
-mAOE: 0.5346
-mAVE: 0.5530
-mAAE: 0.2274
-NDS: 0.4355
-Eval time: 171.8s
+mAP: 0.3329
+mATE: 0.6832
+mASE: 0.2761
+mAOE: 0.5446
+mAVE: 0.5258
+mAAE: 0.2259
+NDS: 0.4409
 
 Per-class results:
 Object Class    AP      ATE     ASE     AOE     AVE     AAE
-car     0.499   0.540   0.165   0.211   0.650   0.233
-truck   0.278   0.719   0.218   0.265   0.547   0.215
-bus     0.386   0.661   0.211   0.171   1.132   0.274
-trailer 0.168   1.034   0.235   0.548   0.408   0.168
-construction_vehicle    0.075   1.124   0.510   1.177   0.111   0.385
-pedestrian      0.284   0.757   0.298   0.966   0.578   0.301
-motorcycle      0.335   0.624   0.263   0.621   0.734   0.237
-bicycle 0.305   0.554   0.264   0.653   0.263   0.006
-traffic_cone    0.462   0.516   0.355   nan     nan     nan
-barrier 0.512   0.491   0.275   0.200   nan     nan
+car     0.505   0.531   0.165   0.189   0.618   0.234
+truck   0.274   0.731   0.206   0.211   0.546   0.223
+bus     0.394   0.673   0.219   0.148   1.061   0.274
+trailer 0.174   0.934   0.228   0.544   0.369   0.183
+construction_vehicle    0.079   1.043   0.528   1.162   0.112   0.376
+pedestrian      0.284   0.748   0.294   0.973   0.575   0.297
+motorcycle      0.345   0.633   0.256   0.719   0.667   0.214
+bicycle 0.314   0.544   0.252   0.778   0.259   0.007
+traffic_cone    0.453   0.519   0.335   nan     nan     nan
+barrier 0.506   0.475   0.279   0.178   nan     nan
 """
 from argparse import ArgumentParser, Namespace
 
 import pytorch_lightning as pl
 
 from callbacks.ema import EMACallback
-from exps.bev_depth_lss_r50_256x704_128x128_24e import \
+from exps.bev_depth_lss_r50_256x704_128x128_24e_ema import \
     BEVDepthLightningModel as BaseBEVDepthLightningModel
 from models.bev_depth import BEVDepth
 
@@ -78,18 +77,17 @@ def run_cli():
                                help='seed for initializing training.')
     parent_parser.add_argument('--ckpt_path', type=str)
     parser = BEVDepthLightningModel.add_model_specific_args(parent_parser)
-    parser.set_defaults(
-        profiler='simple',
-        deterministic=False,
-        max_epochs=24,
-        accelerator='ddp',
-        num_sanity_val_steps=0,
-        gradient_clip_val=5,
-        limit_val_batches=0,
-        enable_checkpointing=False,
-        precision=16,
-        default_root_dir='./outputs/bev_depth_lss_r50_256x704_128x128_24e_2key'
-    )
+    parser.set_defaults(profiler='simple',
+                        deterministic=False,
+                        max_epochs=24,
+                        accelerator='ddp',
+                        num_sanity_val_steps=0,
+                        gradient_clip_val=5,
+                        limit_val_batches=0,
+                        enable_checkpointing=False,
+                        precision=16,
+                        default_root_dir='./outputs/bev_depth_lss_r50_256x704_'
+                        '128x128_24e_2key_ema')
     args = parser.parse_args()
     main(args)
 

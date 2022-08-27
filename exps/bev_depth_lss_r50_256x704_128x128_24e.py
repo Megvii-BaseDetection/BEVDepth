@@ -11,8 +11,8 @@ import torch.utils.data.distributed
 import torchvision.models as models
 from pytorch_lightning.core import LightningModule
 from torch.cuda.amp.autocast_mode import autocast
+from torch.optim.lr_scheduler import MultiStepLR
 
-from callbacks.ema import EMACallback
 from dataset.nusc_mv_det_dataset import NuscMVDetDataset, collate_fn
 from evaluators.det_mv_evaluators import DetMVNuscEvaluator
 from models.bev_depth import BEVDepth
@@ -220,10 +220,8 @@ class BEVDepthLightningModel(LightningModule):
         self.img_conf = img_conf
         self.data_use_cbgs = False
         self.num_sweeps = 1
-        self.sweep_idxes = []
-        self.key_idxes = []
-        self.data_return_depth = False
-        self.model_use_ema = True
+        self.sweep_idxes = list()
+        self.key_idxes = list()
         self.data_return_depth = True
         self.downsample_factor = self.backbone_conf['downsample_factor']
         self.dbound = self.backbone_conf['d_bound']
@@ -371,7 +369,8 @@ class BEVDepthLightningModel(LightningModule):
         optimizer = torch.optim.AdamW(self.model.parameters(),
                                       lr=lr,
                                       weight_decay=1e-7)
-        return [optimizer]
+        scheduler = MultiStepLR(optimizer, [19, 23])
+        return [[optimizer], [scheduler]]
 
     def train_dataloader(self):
         train_dataset = NuscMVDetDataset(
@@ -442,9 +441,7 @@ def main(args: Namespace) -> None:
         pl.seed_everything(args.seed)
 
     model = BEVDepthLightningModel(**vars(args))
-    train_dataloader = model.train_dataloader()
-    ema_callback = EMACallback(len(train_dataloader.dataset) * args.max_epochs)
-    trainer = pl.Trainer.from_argparse_args(args, callbacks=[ema_callback])
+    trainer = pl.Trainer.from_argparse_args(args)
     if args.evaluate:
         trainer.test(model, ckpt_path=args.ckpt_path)
     else:
