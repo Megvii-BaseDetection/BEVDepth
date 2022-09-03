@@ -177,7 +177,7 @@ def run_cli():
                         num_sanity_val_steps=0,
                         gradient_clip_val=5,
                         limit_val_batches=0,
-                        enable_checkpointing=False,
+                        enable_checkpointing=True,
                         precision=16,
                         default_root_dir='./outputs/bev_depth_lss_r50_'
                         '256x704_128x128_20e_cbgs_2key_da')
