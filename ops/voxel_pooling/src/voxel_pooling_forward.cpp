@@ -1,13 +1,11 @@
 // Copyright (c) Megvii Inc. All rights reserved.
-#include <THC/THC.h>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <torch/extension.h>
 #include <torch/serialize/tensor.h>
+#include <ATen/cuda/CUDAContext.h>
 
 #include <vector>
-
-extern THCState *state;
 
 #define CHECK_CUDA(x) \
   TORCH_CHECK(x.type().is_cuda(), #x, " must be a CUDAtensor ")
