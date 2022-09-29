@@ -166,7 +166,8 @@ class NuscMVDetDataset(Dataset):
                                to_rgb=True),
                  return_depth=False,
                  sweep_idxes=list(),
-                 key_idxes=list()):
+                 key_idxes=list(),
+                 use_fusion=False):
         """Dataset used for bevdetection task.
         Args:
             ida_aug_conf (dict): Config for ida augmentation.
@@ -187,6 +188,7 @@ class NuscMVDetDataset(Dataset):
         super().__init__()
         self.infos = mmcv.load(info_path)
         self.is_train = is_train
+        self.split = 'train' if is_train else 'val'
         self.ida_aug_conf = ida_aug_conf
         self.bda_aug_conf = bda_aug_conf
         self.data_root = data_root
@@ -208,6 +210,7 @@ class NuscMVDetDataset(Dataset):
         assert sum([key_idx < 0 for key_idx in key_idxes]) == len(key_idxes),\
             'All `key_idxes` must less than 0.'
         self.key_idxes = [0] + key_idxes
+        self.use_fusion = use_fusion
 
     def _get_sample_indices(self):
         """Load annotations from ann_file.
@@ -387,7 +390,8 @@ class NuscMVDetDataset(Dataset):
                 if self.return_depth and sweep_idx == 0:
                     file_name = os.path.split(cam_info[cam]['filename'])[-1]
                     point_depth = np.fromfile(os.path.join(
-                        self.data_root, 'depth_gt', f'{file_name}.bin'),
+                        self.data_root, 'depth_gt', self.split,
+                        f'{file_name}.bin'),
                                               dtype=np.float32,
                                               count=-1).reshape(-1, 3)
                     point_depth_augmented = depth_transform(

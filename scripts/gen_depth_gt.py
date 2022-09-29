@@ -70,7 +70,7 @@ def map_pointcloud_to_image(
 
 
 data_root = 'data/nuScenes'
-info_path = 'data/nuScenes/nuscenes_12hz_infos_train.pkl'
+info_path = 'data/nuScenes/nuscenes_12hz_infos_val.pkl'
 # data3d_nusc = NuscMVDetData()
 
 lidar_key = 'LIDAR_TOP'
@@ -99,14 +99,14 @@ def worker(info):
         file_name = os.path.split(info['cam_infos'][cam_key]['filename'])[-1]
         np.concatenate([pts_img[:2, :].T, depth[:, None]],
                        axis=1).astype(np.float32).flatten().tofile(
-                           os.path.join(data_root, 'depth_gt',
+                           os.path.join(data_root, 'depth_gt', 'val',
                                         f'{file_name}.bin'))
     # plt.savefig(f"{sample_idx}")
 
 
 if __name__ == '__main__':
     po = Pool(24)
-    mmcv.mkdir_or_exist(os.path.join(data_root, 'depth_gt'))
+    mmcv.mkdir_or_exist(os.path.join(data_root, 'depth_gt', 'val'))
     infos = mmcv.load(info_path)
     # import ipdb; ipdb.set_trace()
     for info in infos:

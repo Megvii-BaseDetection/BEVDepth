@@ -3,7 +3,7 @@ import unittest
 import pytest
 import torch
 
-from layers.backbones.lss_fpn import LSSFPN
+from layers.backbones.base_lss_fpn import BaseLSSFPN
 
 
 class TestLSSFPN(unittest.TestCase):
@@ -35,7 +35,7 @@ class TestLSSFPN(unittest.TestCase):
             'depth_net_conf':
             dict(in_channels=64, mid_channels=64),
         }
-        self.lss_fpn = LSSFPN(**backbone_conf).cuda()
+        self.lss_fpn = BaseLSSFPN(**backbone_conf).cuda()
 
     @pytest.mark.skipif(torch.cuda.is_available() is False,
                         reason='No gpu available.')

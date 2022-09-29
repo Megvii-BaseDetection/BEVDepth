@@ -13,9 +13,9 @@ from pytorch_lightning.core import LightningModule
 from torch.cuda.amp.autocast_mode import autocast
 from torch.optim.lr_scheduler import MultiStepLR
 
-from dataset.nusc_mv_det_dataset import NuscMVDetDataset, collate_fn
+from datasets.nusc_mv_det_dataset import NuscMVDetDataset, collate_fn
 from evaluators.det_mv_evaluators import DetMVNuscEvaluator
-from models.bev_depth import BEVDepth
+from models.base_bev_depth import BaseBEVDepth
 from utils.torch_dist import all_gather_object, get_rank, synchronize
 
 H = 900
@@ -213,9 +213,9 @@ class BEVDepthLightningModel(LightningModule):
         self.default_root_dir = default_root_dir
         self.evaluator = DetMVNuscEvaluator(class_names=self.class_names,
                                             output_dir=self.default_root_dir)
-        self.model = BEVDepth(self.backbone_conf,
-                              self.head_conf,
-                              is_train_depth=True)
+        self.model = BaseBEVDepth(self.backbone_conf,
+                                  self.head_conf,
+                                  is_train_depth=True)
         self.mode = 'valid'
         self.img_conf = img_conf
         self.data_use_cbgs = False

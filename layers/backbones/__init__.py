@@ -1,3 +1,3 @@
-from .lss_fpn import LSSFPN
+from .base_lss_fpn import BaseLSSFPN
 
-__all__ = ['LSSFPN']
+__all__ = ['BaseLSSFPN']
