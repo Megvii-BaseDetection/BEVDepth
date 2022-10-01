@@ -314,7 +314,7 @@ class NuscMVDetDataset(Dataset):
         sweep_ida_mats = list()
         sweep_sensor2sensor_mats = list()
         sweep_timestamps = list()
-        gt_depth = list()
+        sweep_lidar_depth = list()
         for cam in cams:
             imgs = list()
             sensor2ego_mats = list()
@@ -322,6 +322,7 @@ class NuscMVDetDataset(Dataset):
             ida_mats = list()
             sensor2sensor_mats = list()
             timestamps = list()
+            lidar_depth = list()
             key_info = cam_infos[0]
             resize, resize_dims, crop, flip, \
                 rotate_ida = self.sample_ida_augmentation(
@@ -387,7 +388,7 @@ class NuscMVDetDataset(Dataset):
                 intrin_mat[3, 3] = 1
                 intrin_mat[:3, :3] = torch.Tensor(
                     cam_info[cam]['calibrated_sensor']['camera_intrinsic'])
-                if self.return_depth and sweep_idx == 0:
+                if self.return_depth and (self.use_fusion or sweep_idx == 0):
                     file_name = os.path.split(cam_info[cam]['filename'])[-1]
                     point_depth = np.fromfile(os.path.join(
                         self.data_root, 'depth_gt', self.split,
@@ -397,7 +398,7 @@ class NuscMVDetDataset(Dataset):
                     point_depth_augmented = depth_transform(
                         point_depth, resize, self.ida_aug_conf['final_dim'],
                         crop, flip, rotate_ida)
-                    gt_depth.append(point_depth_augmented)
+                    lidar_depth.append(point_depth_augmented)
                 img, ida_mat = img_transform(
                     img,
                     resize=resize,
@@ -419,6 +420,7 @@ class NuscMVDetDataset(Dataset):
             sweep_ida_mats.append(torch.stack(ida_mats))
             sweep_sensor2sensor_mats.append(torch.stack(sensor2sensor_mats))
             sweep_timestamps.append(torch.tensor(timestamps))
+            sweep_lidar_depth.append(torch.stack(lidar_depth))
         # Get mean pose of all cams.
         ego2global_rotation = np.mean(
             [key_info[cam]['ego_pose']['rotation'] for cam in cams], 0)
@@ -440,7 +442,7 @@ class NuscMVDetDataset(Dataset):
             img_metas,
         ]
         if self.return_depth:
-            ret_list.append(torch.stack(gt_depth))
+            ret_list.append(torch.stack(sweep_lidar_depth).permute(1, 0, 2, 3))
         return ret_list
 
     def get_gt(self, info, cams):

@@ -239,7 +239,7 @@ class BEVDepthLightningModel(LightningModule):
             sweep_imgs = sweep_imgs.cuda()
             gt_boxes = [gt_box.cuda() for gt_box in gt_boxes]
             gt_labels = [gt_label.cuda() for gt_label in gt_labels]
-        preds = self(sweep_imgs, mats, lidar_depth.unsqueeze(1))
+        preds = self(sweep_imgs, mats, lidar_depth)
         if isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
             targets = self.model.module.get_targets(gt_boxes, gt_labels)
             detection_loss = self.model.module.loss(targets, preds)
@@ -296,7 +296,7 @@ class BEVDepthLightningModel(LightningModule):
             for key, value in mats.items():
                 mats[key] = value.cuda()
             sweep_imgs = sweep_imgs.cuda()
-        preds = self.model(sweep_imgs, mats, lidar_depth.unsqueeze(1))
+        preds = self.model(sweep_imgs, mats, lidar_depth)
         if isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
             results = self.model.module.get_bboxes(preds, img_metas)
         else:
@@ -369,7 +369,7 @@ class BEVDepthLightningModel(LightningModule):
             sweep_idxes=self.sweep_idxes,
             key_idxes=self.key_idxes,
             return_depth=self.data_return_depth,
-        )
+            use_fusion=True)
 
         train_loader = torch.utils.data.DataLoader(
             train_dataset,
@@ -396,7 +396,7 @@ class BEVDepthLightningModel(LightningModule):
             sweep_idxes=self.sweep_idxes,
             key_idxes=self.key_idxes,
             return_depth=self.data_return_depth,
-        )
+            use_fusion=True)
         val_loader = torch.utils.data.DataLoader(
             val_dataset,
             batch_size=self.batch_size_per_device,
@@ -455,7 +455,8 @@ def run_cli():
         limit_val_batches=0,
         enable_checkpointing=True,
         precision=16,
-        default_root_dir='./outputs/bev_depth_lss_r50_256x704_128x128_24e')
+        default_root_dir='./outputs/bev_depth_fusion_lss_r50_256x704_128x128'
+        '_24e')
     args = parser.parse_args()
     main(args)
 

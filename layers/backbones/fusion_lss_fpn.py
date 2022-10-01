@@ -50,13 +50,13 @@ class DepthNet(nn.Module):
     def forward(self, x, mats_dict, lidar_depth, scale_depth_factor=1000.0):
         x = self.reduce_conv(x)
         context = self.context_conv(x)
-        inv_intrinsics = torch.inverse(mats_dict['intrin_mats'])
+        inv_intrinsics = torch.inverse(mats_dict['intrin_mats'][:, 0:1, ...])
         pixel_size = torch.norm(torch.stack(
             [inv_intrinsics[..., 0, 0], inv_intrinsics[..., 1, 1]], dim=-1),
                                 dim=-1).reshape(-1, 1)
-        aug_scale = torch.sqrt(mats_dict['ida_mats'][..., 0, 0]**2 +
-                               mats_dict['ida_mats'][..., 0, 1]**2).reshape(
-                                   -1, 1)
+        aug_scale = torch.sqrt(mats_dict['ida_mats'][:, 0, :, 0, 0]**2 +
+                               mats_dict['ida_mats'][:, 0, :, 0,
+                                                     0]**2).reshape(-1, 1)
         scaled_pixel_size = pixel_size * scale_depth_factor / aug_scale
         x_se = self.mlp(scaled_pixel_size)[..., None, None]
         x = self.se(x, x_se)
@@ -201,7 +201,7 @@ class FusionLSSFPN(BaseLSSFPN):
             with torch.no_grad():
                 feature_map = self._forward_single_sweep(
                     sweep_index,
-                    sweep_imgs[:, sweep_index, ...],
+                    sweep_imgs[:, sweep_index:sweep_index + 1, ...],
                     mats_dict,
                     lidar_depth[:, sweep_index, ...],
                     is_return_depth=False)
