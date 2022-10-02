@@ -5,7 +5,7 @@ from nuscenes.utils import splits
 from tqdm import tqdm
 
 
-def generate_info(nusc, scenes):
+def generate_info(nusc, scenes, max_cam_sweeps=6, max_lidar_sweeps=10):
     infos = list()
     for cur_scene in tqdm(nusc.scene):
         if cur_scene['name'] not in scenes:
@@ -14,7 +14,9 @@ def generate_info(nusc, scenes):
         cur_sample = nusc.get('sample', first_sample_token)
         while True:
             info = dict()
-            cam_info = dict()
+            sweep_cam_info = dict()
+            cam_datas = list()
+            lidar_datas = list()
             info['sample_token'] = cur_sample['token']
             info['timestamp'] = cur_sample['timestamp']
             info['scene_token'] = cur_sample['scene_token']
@@ -28,67 +30,104 @@ def generate_info(nusc, scenes):
             for cam_name in cam_names:
                 cam_data = nusc.get('sample_data',
                                     cur_sample['data'][cam_name])
-                cam_info = dict()
-                cam_info['sample_token'] = cam_data['sample_token']
-                cam_info['ego_pose'] = nusc.get('ego_pose',
-                                                cam_data['ego_pose_token'])
-                cam_info['timestamp'] = cam_data['timestamp']
-                cam_info['is_key_frame'] = cam_data['is_key_frame']
-                cam_info['height'] = cam_data['height']
-                cam_info['width'] = cam_data['width']
-                cam_info['filename'] = cam_data['filename']
-                cam_info['calibrated_sensor'] = nusc.get(
+                cam_datas.append(cam_data)
+                sweep_cam_info = dict()
+                sweep_cam_info['sample_token'] = cam_data['sample_token']
+                sweep_cam_info['ego_pose'] = nusc.get(
+                    'ego_pose', cam_data['ego_pose_token'])
+                sweep_cam_info['timestamp'] = cam_data['timestamp']
+                sweep_cam_info['is_key_frame'] = cam_data['is_key_frame']
+                sweep_cam_info['height'] = cam_data['height']
+                sweep_cam_info['width'] = cam_data['width']
+                sweep_cam_info['filename'] = cam_data['filename']
+                sweep_cam_info['calibrated_sensor'] = nusc.get(
                     'calibrated_sensor', cam_data['calibrated_sensor_token'])
-                cam_infos[cam_name] = cam_info
+                cam_infos[cam_name] = sweep_cam_info
             for lidar_name in lidar_names:
                 lidar_data = nusc.get('sample_data',
                                       cur_sample['data'][lidar_name])
-                lidar_info = dict()
-                lidar_info['sample_token'] = lidar_data['sample_token']
-                lidar_info['ego_pose'] = nusc.get('ego_pose',
-                                                  lidar_data['ego_pose_token'])
-                lidar_info['timestamp'] = lidar_data['timestamp']
-                lidar_info['filename'] = lidar_data['filename']
-                lidar_info['calibrated_sensor'] = nusc.get(
+                lidar_datas.append(lidar_data)
+                sweep_lidar_info = dict()
+                sweep_lidar_info['sample_token'] = lidar_data['sample_token']
+                sweep_lidar_info['ego_pose'] = nusc.get(
+                    'ego_pose', lidar_data['ego_pose_token'])
+                sweep_lidar_info['timestamp'] = lidar_data['timestamp']
+                sweep_lidar_info['filename'] = lidar_data['filename']
+                sweep_lidar_info['calibrated_sensor'] = nusc.get(
                     'calibrated_sensor', lidar_data['calibrated_sensor_token'])
-                lidar_infos[lidar_name] = lidar_info
+                lidar_infos[lidar_name] = sweep_lidar_info
 
-            sweeps = list()
+            lidar_sweeps = [dict() for _ in range(max_lidar_sweeps)]
+            cam_sweeps = [dict() for _ in range(max_cam_sweeps)]
             info['cam_infos'] = cam_infos
             info['lidar_infos'] = lidar_infos
-            cam_datas = list()
-            for i in range(6):
-                sweeps.append(dict())
-            for cam_name in cam_names:
-                cam_datas.append(
-                    nusc.get('sample_data', cur_sample['data'][cam_name]))
+            # for i in range(max_cam_sweeps):
+            #     cam_sweeps.append(dict())
             for k, cam_data in enumerate(cam_datas):
-                for j in range(6):
-                    if cam_data['prev'] == '':
+                sweep_cam_data = cam_data
+                for j in range(max_cam_sweeps):
+                    if sweep_cam_data['prev'] == '':
                         break
                     else:
-                        cam_data = nusc.get('sample_data', cam_data['prev'])
-                        cam_info = dict()
-                        cam_info['sample_token'] = cam_data['sample_token']
-                        assert cam_info['sample_token'] == cam_info[
+                        sweep_cam_data = nusc.get('sample_data',
+                                                  sweep_cam_data['prev'])
+                        sweep_cam_info = dict()
+                        sweep_cam_info['sample_token'] = sweep_cam_data[
                             'sample_token']
-                        cam_info['ego_pose'] = nusc.get(
+                        if sweep_cam_info['sample_token'] != cam_data[
+                                'sample_token']:
+                            break
+                        sweep_cam_info['ego_pose'] = nusc.get(
                             'ego_pose', cam_data['ego_pose_token'])
-                        cam_info['timestamp'] = cam_data['timestamp']
-                        cam_info['is_key_frame'] = cam_data['is_key_frame']
-                        cam_info['height'] = cam_data['height']
-                        cam_info['width'] = cam_data['width']
-                        cam_info['filename'] = cam_data['filename']
-                        cam_info['calibrated_sensor'] = nusc.get(
+                        sweep_cam_info['timestamp'] = sweep_cam_data[
+                            'timestamp']
+                        sweep_cam_info['is_key_frame'] = sweep_cam_data[
+                            'is_key_frame']
+                        sweep_cam_info['height'] = sweep_cam_data['height']
+                        sweep_cam_info['width'] = sweep_cam_data['width']
+                        sweep_cam_info['filename'] = sweep_cam_data['filename']
+                        sweep_cam_info['calibrated_sensor'] = nusc.get(
                             'calibrated_sensor',
                             cam_data['calibrated_sensor_token'])
-                        sweeps[j][cam_names[k]] = cam_info
+                        cam_sweeps[j][cam_names[k]] = sweep_cam_info
+
+            for k, lidar_data in enumerate(lidar_datas):
+                sweep_lidar_data = lidar_data
+                for j in range(max_lidar_sweeps):
+                    if sweep_lidar_data['prev'] == '':
+                        break
+                    else:
+                        sweep_lidar_data = nusc.get('sample_data',
+                                                    sweep_lidar_data['prev'])
+                        sweep_lidar_info = dict()
+                        sweep_lidar_info['sample_token'] = sweep_lidar_data[
+                            'sample_token']
+                        if sweep_lidar_info['sample_token'] != lidar_data[
+                                'sample_token']:
+                            break
+                        sweep_lidar_info['ego_pose'] = nusc.get(
+                            'ego_pose', sweep_lidar_data['ego_pose_token'])
+                        sweep_lidar_info['timestamp'] = sweep_lidar_data[
+                            'timestamp']
+                        sweep_lidar_info['is_key_frame'] = sweep_lidar_data[
+                            'is_key_frame']
+                        sweep_lidar_info['filename'] = sweep_lidar_data[
+                            'filename']
+                        sweep_lidar_info['calibrated_sensor'] = nusc.get(
+                            'calibrated_sensor',
+                            cam_data['calibrated_sensor_token'])
+                        lidar_sweeps[j][lidar_names[k]] = sweep_lidar_info
             # Remove empty sweeps.
-            for i, sweep in enumerate(sweeps):
+            for i, sweep in enumerate(cam_sweeps):
                 if len(sweep.keys()) == 0:
-                    sweeps = sweeps[:i]
+                    cam_sweeps = cam_sweeps[:i]
                     break
-            info['sweeps'] = sweeps
+            for i, sweep in enumerate(lidar_sweeps):
+                if len(sweep.keys()) == 0:
+                    lidar_sweeps = lidar_sweeps[:i]
+                    break
+            info['cam_sweeps'] = cam_sweeps
+            info['lidar_sweeps'] = lidar_sweeps
             ann_infos = list()
             for ann in cur_sample['anns']:
                 ann_info = nusc.get('sample_annotation', ann)
@@ -114,8 +153,8 @@ def main():
     val_scenes = splits.val
     train_infos = generate_info(nusc, train_scenes)
     val_infos = generate_info(nusc, val_scenes)
-    mmcv.dump(train_infos, './data/nuScenes/nuscenes_12hz_infos_train.pkl')
-    mmcv.dump(val_infos, './data/nuScenes/nuscenes_12hz_infos_val.pkl')
+    mmcv.dump(train_infos, './data/nuScenes/nuscenes_infos_train.pkl')
+    mmcv.dump(val_infos, './data/nuScenes/nuscenes_infos_val.pkl')
 
 
 if __name__ == '__main__':
