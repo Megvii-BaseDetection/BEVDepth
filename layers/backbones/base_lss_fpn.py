@@ -9,7 +9,7 @@ from torch import nn
 
 from ops.voxel_pooling import voxel_pooling
 
-__all__ = ['LSSFPN']
+__all__ = ['BaseLSSFPN']
 
 
 class _ASPPModule(nn.Module):
@@ -245,7 +245,7 @@ class DepthNet(nn.Module):
         return torch.cat([depth, context], dim=1)
 
 
-class LSSFPN(nn.Module):
+class BaseLSSFPN(nn.Module):
     def __init__(self, x_bound, y_bound, z_bound, d_bound, final_dim,
                  downsample_factor, output_channels, img_backbone_conf,
                  img_neck_conf, depth_net_conf):
@@ -266,7 +266,7 @@ class LSSFPN(nn.Module):
             depth_net_conf (dict): Config for depth net.
         """
 
-        super(LSSFPN, self).__init__()
+        super(BaseLSSFPN, self).__init__()
         self.downsample_factor = downsample_factor
         self.d_bound = d_bound
         self.final_dim = final_dim

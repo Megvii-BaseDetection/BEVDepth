@@ -70,7 +70,9 @@ def map_pointcloud_to_image(
 
 
 data_root = 'data/nuScenes'
-info_path = 'data/nuScenes/nuscenes_12hz_infos_train.pkl'
+train_info_path = 'data/nuScenes/nuscenes_12hz_infos_val.pkl'
+val_info_path = 'data/nuScenes/nuscenes_12hz_infos_val.pkl'
+SPLIT = 'val'
 # data3d_nusc = NuscMVDetData()
 
 lidar_key = 'LIDAR_TOP'
@@ -80,7 +82,7 @@ cam_keys = [
 ]
 
 
-def worker(info):
+def worker(info, split):
     lidar_path = info['lidar_infos'][lidar_key]['filename']
     points = np.fromfile(os.path.join(data_root, lidar_path),
                          dtype=np.float32,
@@ -99,17 +101,25 @@ def worker(info):
         file_name = os.path.split(info['cam_infos'][cam_key]['filename'])[-1]
         np.concatenate([pts_img[:2, :].T, depth[:, None]],
                        axis=1).astype(np.float32).flatten().tofile(
-                           os.path.join(data_root, 'depth_gt',
+                           os.path.join(data_root, 'depth_gt', split,
                                         f'{file_name}.bin'))
     # plt.savefig(f"{sample_idx}")
 
 
 if __name__ == '__main__':
     po = Pool(24)
-    mmcv.mkdir_or_exist(os.path.join(data_root, 'depth_gt'))
-    infos = mmcv.load(info_path)
+    mmcv.mkdir_or_exist(os.path.join(data_root, 'depth_gt', 'train'))
+    train_infos = mmcv.load(train_info_path)
     # import ipdb; ipdb.set_trace()
-    for info in infos:
-        po.apply_async(func=worker, args=(info, ))
+    for info in train_infos:
+        po.apply_async(func=worker, args=(info, 'train'))
+    po.close()
+    po.join()
+    po = Pool(24)
+    mmcv.mkdir_or_exist(os.path.join(data_root, 'depth_gt', 'val'))
+    val_infos = mmcv.load(val_info_path)
+    # import ipdb; ipdb.set_trace()
+    for info in val_infos:
+        po.apply_async(func=worker, args=(info, 'val'))
     po.close()
     po.join()

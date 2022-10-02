@@ -26,9 +26,9 @@ from argparse import ArgumentParser, Namespace
 import pytorch_lightning as pl
 
 from callbacks.ema import EMACallback
-from exps.bev_depth_lss_r50_256x704_128x128_24e_ema import \
+from exps.mv.bev_depth_lss_r50_256x704_128x128_24e_ema import \
     BEVDepthLightningModel as BaseBEVDepthLightningModel
-from models.bev_depth import BEVDepth
+from models.base_bev_depth import BaseBEVDepth
 
 
 class BEVDepthLightningModel(BaseBEVDepthLightningModel):
@@ -43,9 +43,9 @@ class BEVDepthLightningModel(BaseBEVDepthLightningModel):
         self.head_conf['train_cfg']['code_weight'] = [
             1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
         ]
-        self.model = BEVDepth(self.backbone_conf,
-                              self.head_conf,
-                              is_train_depth=True)
+        self.model = BaseBEVDepth(self.backbone_conf,
+                                  self.head_conf,
+                                  is_train_depth=True)
 
 
 def main(args: Namespace) -> None:

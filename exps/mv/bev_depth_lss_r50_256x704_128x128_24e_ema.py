@@ -8,7 +8,7 @@ import torch.utils.data
 import torch.utils.data.distributed
 
 from callbacks.ema import EMACallback
-from exps.bev_depth_lss_r50_256x704_128x128_24e import \
+from exps.mv.bev_depth_lss_r50_256x704_128x128_24e import \
     BEVDepthLightningModel as BaseBEVDepthLightningModel
 
 
