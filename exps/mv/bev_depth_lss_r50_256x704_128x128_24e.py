@@ -13,7 +13,7 @@ from pytorch_lightning.core import LightningModule
 from torch.cuda.amp.autocast_mode import autocast
 from torch.optim.lr_scheduler import MultiStepLR
 
-from datasets.nusc_mv_det_dataset import NuscMVDetDataset, collate_fn
+from datasets.nusc_det_dataset import NuscDetDataset, collate_fn
 from evaluators.det_mv_evaluators import DetMVNuscEvaluator
 from models.base_bev_depth import BaseBEVDepth
 from utils.torch_dist import all_gather_object, get_rank, synchronize
@@ -373,7 +373,7 @@ class BEVDepthLightningModel(LightningModule):
         return [[optimizer], [scheduler]]
 
     def train_dataloader(self):
-        train_dataset = NuscMVDetDataset(
+        train_dataset = NuscDetDataset(
             ida_aug_conf=self.ida_aug_conf,
             bda_aug_conf=self.bda_aug_conf,
             classes=self.class_names,
@@ -402,7 +402,7 @@ class BEVDepthLightningModel(LightningModule):
         return train_loader
 
     def val_dataloader(self):
-        val_dataset = NuscMVDetDataset(
+        val_dataset = NuscDetDataset(
             ida_aug_conf=self.ida_aug_conf,
             bda_aug_conf=self.bda_aug_conf,
             classes=self.class_names,

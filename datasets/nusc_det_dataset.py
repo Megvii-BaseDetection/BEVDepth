@@ -9,7 +9,7 @@ from PIL import Image
 from pyquaternion import Quaternion
 from torch.utils.data import Dataset
 
-__all__ = ['NuscMVDetDataset']
+__all__ = ['NuscDetDataset']
 
 map_name_from_general_to_detection = {
     'human.pedestrian.adult': 'pedestrian',
@@ -151,7 +151,7 @@ def depth_transform(cam_depth, resize, resize_dims, crop, flip, rotate):
     return torch.Tensor(depth_map)
 
 
-class NuscMVDetDataset(Dataset):
+class NuscDetDataset(Dataset):
     def __init__(self,
                  ida_aug_conf,
                  bda_aug_conf,
@@ -184,6 +184,8 @@ class NuscMVDetDataset(Dataset):
                 default: list().
             key_idxes (list): List of key idxes to be used.
                 default: list().
+            use_fusion (bool): Whether to use lidar data.
+                default: False.
         """
         super().__init__()
         self.infos = mmcv.load(info_path)
