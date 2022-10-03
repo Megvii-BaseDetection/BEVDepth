@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 import pytorch_lightning as pl
 
 from callbacks.ema import EMACallback
+from utils.torch_dist import all_gather_object, synchronize
 
 from .base_exp import BEVDepthLightningModel
 
@@ -19,6 +20,11 @@ def run_cli(model_class=BEVDepthLightningModel,
                                dest='evaluate',
                                action='store_true',
                                help='evaluate model on validation set')
+    parent_parser.add_argument('-p',
+                               '--predict',
+                               dest='predict',
+                               action='store_true',
+                               help='predict model on testing set')
     parent_parser.add_argument('-b', '--batch_size_per_device', type=int)
     parent_parser.add_argument('--seed',
                                type=int,
@@ -50,5 +56,22 @@ def run_cli(model_class=BEVDepthLightningModel,
         trainer = pl.Trainer.from_argparse_args(args)
     if args.evaluate:
         trainer.test(model, ckpt_path=args.ckpt_path)
+    elif args.predict:
+        predict_step_outputs = trainer.predict(model, ckpt_path=args.ckpt_path)
+        all_pred_results = list()
+        all_img_metas = list()
+        for predict_step_output in predict_step_outputs:
+            for i in range(len(predict_step_output)):
+                all_pred_results.append(predict_step_output[i][:3])
+                all_img_metas.append(predict_step_output[i][3])
+        synchronize()
+        len_dataset = len(model.test_dataloader().dataset)
+        all_pred_results = sum(
+            map(list, zip(*all_gather_object(all_pred_results))),
+            [])[:len_dataset]
+        all_img_metas = sum(map(list, zip(*all_gather_object(all_img_metas))),
+                            [])[:len_dataset]
+        model.evaluator._format_bbox(all_pred_results, all_img_metas,
+                                     os.path.dirname(args.ckpt_path))
     else:
         trainer.fit(model)
