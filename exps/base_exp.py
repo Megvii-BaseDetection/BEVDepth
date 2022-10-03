@@ -13,7 +13,7 @@ from torch.cuda.amp.autocast_mode import autocast
 from torch.optim.lr_scheduler import MultiStepLR
 
 from datasets.nusc_det_dataset import NuscDetDataset, collate_fn
-from evaluators.det_mv_evaluators import DetMVNuscEvaluator
+from evaluators.det_evaluators import DetNuscEvaluator
 from models.base_bev_depth import BaseBEVDepth
 from utils.torch_dist import all_gather_object, get_rank, synchronize
 
@@ -210,8 +210,8 @@ class BEVDepthLightningModel(LightningModule):
         self.bda_aug_conf = bda_aug_conf
         mmcv.mkdir_or_exist(default_root_dir)
         self.default_root_dir = default_root_dir
-        self.evaluator = DetMVNuscEvaluator(class_names=self.class_names,
-                                            output_dir=self.default_root_dir)
+        self.evaluator = DetNuscEvaluator(class_names=self.class_names,
+                                          output_dir=self.default_root_dir)
         self.model = BaseBEVDepth(self.backbone_conf,
                                   self.head_conf,
                                   is_train_depth=True)
@@ -229,6 +229,7 @@ class BEVDepthLightningModel(LightningModule):
         self.use_fusion = False
         self.train_info_paths = 'data/nuScenes/nuscenes_infos_train.pkl'
         self.val_info_paths = 'data/nuScenes/nuscenes_infos_val.pkl'
+        self.predict_info_paths = 'data/nuScenes/nuscenes_infos_test.pkl'
 
     def forward(self, sweep_imgs, mats):
         return self.model(sweep_imgs, mats)
@@ -428,8 +429,34 @@ class BEVDepthLightningModel(LightningModule):
     def test_dataloader(self):
         return self.val_dataloader()
 
+    def predict_dataloader(self):
+        predict_dataset = NuscDetDataset(ida_aug_conf=self.ida_aug_conf,
+                                         bda_aug_conf=self.bda_aug_conf,
+                                         classes=self.class_names,
+                                         data_root=self.data_root,
+                                         info_paths=self.predict_info_paths,
+                                         is_train=False,
+                                         img_conf=self.img_conf,
+                                         num_sweeps=self.num_sweeps,
+                                         sweep_idxes=self.sweep_idxes,
+                                         key_idxes=self.key_idxes,
+                                         return_depth=self.use_fusion,
+                                         use_fusion=self.use_fusion)
+        predict_loader = torch.utils.data.DataLoader(
+            predict_dataset,
+            batch_size=self.batch_size_per_device,
+            shuffle=False,
+            collate_fn=partial(collate_fn, is_return_depth=self.use_fusion),
+            num_workers=4,
+            sampler=None,
+        )
+        return predict_loader
+
     def test_step(self, batch, batch_idx):
         return self.eval_step(batch, batch_idx, 'test')
+
+    def predict_step(self, batch, batch_idx):
+        return self.eval_step(batch, batch_idx, 'predict')
 
     @staticmethod
     def add_model_specific_args(parent_parser):  # pragma: no-cover

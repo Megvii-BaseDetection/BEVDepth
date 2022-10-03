@@ -9,10 +9,10 @@ import pyquaternion
 from nuscenes.utils.data_classes import Box
 from pyquaternion import Quaternion
 
-__all__ = ['DetMVNuscEvaluator']
+__all__ = ['DetNuscEvaluator']
 
 
-class DetMVNuscEvaluator():
+class DetNuscEvaluator():
     ErrNameMapping = {
         'trans_err': 'mATE',
         'scale_err': 'mASE',
