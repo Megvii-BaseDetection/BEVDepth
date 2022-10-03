@@ -21,76 +21,11 @@ bicycle 0.314   0.544   0.252   0.778   0.259   0.007
 traffic_cone    0.453   0.519   0.335   nan     nan     nan
 barrier 0.506   0.475   0.279   0.178   nan     nan
 """
-from argparse import ArgumentParser, Namespace
-
-import pytorch_lightning as pl
-
-from callbacks.ema import EMACallback
-from exps.mv.bev_depth_lss_r50_256x704_128x128_24e_ema import \
-    BEVDepthLightningModel as BaseBEVDepthLightningModel
-from models.base_bev_depth import BaseBEVDepth
-
-
-class BEVDepthLightningModel(BaseBEVDepthLightningModel):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.key_idxes = [-1]
-        self.head_conf['bev_backbone_conf']['in_channels'] = 80 * (
-            len(self.key_idxes) + 1)
-        self.head_conf['bev_neck_conf']['in_channels'] = [
-            80 * (len(self.key_idxes) + 1), 160, 320, 640
-        ]
-        self.head_conf['train_cfg']['code_weight'] = [
-            1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
-        ]
-        self.model = BaseBEVDepth(self.backbone_conf,
-                                  self.head_conf,
-                                  is_train_depth=True)
-
-
-def main(args: Namespace) -> None:
-    if args.seed is not None:
-        pl.seed_everything(args.seed)
-
-    model = BEVDepthLightningModel(**vars(args))
-    train_dataloader = model.train_dataloader()
-    ema_callback = EMACallback(len(train_dataloader.dataset) * args.max_epochs)
-    trainer = pl.Trainer.from_argparse_args(args, callbacks=[ema_callback])
-    if args.evaluate:
-        trainer.test(model, ckpt_path=args.ckpt_path)
-    else:
-        trainer.fit(model)
-
-
-def run_cli():
-    parent_parser = ArgumentParser(add_help=False)
-    parent_parser = pl.Trainer.add_argparse_args(parent_parser)
-    parent_parser.add_argument('-e',
-                               '--evaluate',
-                               dest='evaluate',
-                               action='store_true',
-                               help='evaluate model on validation set')
-    parent_parser.add_argument('-b', '--batch_size_per_device', type=int)
-    parent_parser.add_argument('--seed',
-                               type=int,
-                               default=0,
-                               help='seed for initializing training.')
-    parent_parser.add_argument('--ckpt_path', type=str)
-    parser = BEVDepthLightningModel.add_model_specific_args(parent_parser)
-    parser.set_defaults(profiler='simple',
-                        deterministic=False,
-                        max_epochs=24,
-                        accelerator='ddp',
-                        num_sanity_val_steps=0,
-                        gradient_clip_val=5,
-                        limit_val_batches=0,
-                        enable_checkpointing=False,
-                        precision=16,
-                        default_root_dir='./outputs/bev_depth_lss_r50_256x704_'
-                        '128x128_24e_2key_ema')
-    args = parser.parse_args()
-    main(args)
-
+from exps.base_cli import run_cli
+from exps.mv.bev_depth_lss_r50_256x704_128x128_24e_2key import \
+    BEVDepthLightningModel
 
 if __name__ == '__main__':
-    run_cli()
+    run_cli(BEVDepthLightningModel,
+            'bev_depth_lss_r50_256x704_128x128_24e_2key_ema',
+            use_ema=True)
