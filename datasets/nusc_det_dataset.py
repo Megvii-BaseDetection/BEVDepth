@@ -153,8 +153,8 @@ def depth_transform(cam_depth, resize, resize_dims, crop, flip, rotate):
 
 
 def map_pointcloud_to_image(
-    pc,
-    im,
+    lidar_points,
+    img,
     lidar_calibrated_sensor,
     lidar_ego_pose,
     cam_calibrated_sensor,
@@ -167,31 +167,33 @@ def map_pointcloud_to_image(
     # First step: transform the pointcloud to the ego vehicle
     # frame for the timestamp of the sweep.
 
-    pc = LidarPointCloud(pc.T)
-    pc.rotate(Quaternion(lidar_calibrated_sensor['rotation']).rotation_matrix)
-    pc.translate(np.array(lidar_calibrated_sensor['translation']))
+    lidar_points = LidarPointCloud(lidar_points.T)
+    lidar_points.rotate(
+        Quaternion(lidar_calibrated_sensor['rotation']).rotation_matrix)
+    lidar_points.translate(np.array(lidar_calibrated_sensor['translation']))
 
     # Second step: transform from ego to the global frame.
-    pc.rotate(Quaternion(lidar_ego_pose['rotation']).rotation_matrix)
-    pc.translate(np.array(lidar_ego_pose['translation']))
+    lidar_points.rotate(Quaternion(lidar_ego_pose['rotation']).rotation_matrix)
+    lidar_points.translate(np.array(lidar_ego_pose['translation']))
 
     # Third step: transform from global into the ego vehicle
     # frame for the timestamp of the image.
-    pc.translate(-np.array(cam_ego_pose['translation']))
-    pc.rotate(Quaternion(cam_ego_pose['rotation']).rotation_matrix.T)
+    lidar_points.translate(-np.array(cam_ego_pose['translation']))
+    lidar_points.rotate(Quaternion(cam_ego_pose['rotation']).rotation_matrix.T)
 
     # Fourth step: transform from ego into the camera.
-    pc.translate(-np.array(cam_calibrated_sensor['translation']))
-    pc.rotate(Quaternion(cam_calibrated_sensor['rotation']).rotation_matrix.T)
+    lidar_points.translate(-np.array(cam_calibrated_sensor['translation']))
+    lidar_points.rotate(
+        Quaternion(cam_calibrated_sensor['rotation']).rotation_matrix.T)
 
     # Fifth step: actually take a "picture" of the point cloud.
     # Grab the depths (camera frame z axis points away from the camera).
-    depths = pc.points[2, :]
+    depths = lidar_points.points[2, :]
     coloring = depths
 
     # Take the actual picture (matrix multiplication with camera-matrix
     # + renormalization).
-    points = view_points(pc.points[:3, :],
+    points = view_points(lidar_points.points[:3, :],
                          np.array(cam_calibrated_sensor['camera_intrinsic']),
                          normalize=True)
 
@@ -203,9 +205,9 @@ def map_pointcloud_to_image(
     mask = np.ones(depths.shape[0], dtype=bool)
     mask = np.logical_and(mask, depths > min_dist)
     mask = np.logical_and(mask, points[0, :] > 1)
-    mask = np.logical_and(mask, points[0, :] < im.size[0] - 1)
+    mask = np.logical_and(mask, points[0, :] < img.size[0] - 1)
     mask = np.logical_and(mask, points[1, :] > 1)
-    mask = np.logical_and(mask, points[1, :] < im.size[1] - 1)
+    mask = np.logical_and(mask, points[1, :] < img.size[1] - 1)
     points = points[:, mask]
     coloring = coloring[mask]
 
@@ -606,17 +608,30 @@ class NuscDetDataset(Dataset):
             info = self.infos[cur_idx]
             cam_infos.append(info['cam_infos'])
             lidar_infos.append(info['lidar_infos'])
+            lidar_sweep_timestamps = [
+                lidar_sweep['LIDAR_TOP']['timestamp']
+                for lidar_sweep in info['lidar_sweeps']
+            ]
             for sweep_idx in self.sweeps_idx:
-                if len(info['sweeps']) == 0:
+                if len(info['cam_sweeps']) == 0:
                     cam_infos.append(info['cam_infos'])
+                    lidar_infos.append(info['lidar_infos'])
                 else:
                     # Handle scenarios when current sweep doesn't have all
                     # cam keys.
-                    for i in range(min(len(info['sweeps']) - 1, sweep_idx), -1,
-                                   -1):
-                        if sum([cam in info['sweeps'][i]
+                    for i in range(min(len(info['cam_sweeps']) - 1, sweep_idx),
+                                   -1, -1):
+                        if sum([cam in info['cam_sweeps'][i]
                                 for cam in cams]) == len(cams):
-                            cam_infos.append(info['sweeps'][i])
+                            cam_infos.append(info['cam_sweeps'][i])
+                            cam_timestamp = np.mean([
+                                val['timestamp']
+                                for val in info['cam_sweeps'][i].values()
+                            ])
+                            # Find the closest lidar frame to the cam frame.
+                            lidar_idx = np.abs(lidar_sweep_timestamps -
+                                               cam_timestamp).argmin()
+                            lidar_infos.append(info['lidar_sweeps'][lidar_idx])
                             break
         if self.return_depth:
             image_data_list = self.get_image(cam_infos, cams, lidar_infos)
