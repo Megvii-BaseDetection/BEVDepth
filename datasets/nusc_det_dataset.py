@@ -220,7 +220,7 @@ class NuscDetDataset(Dataset):
                  bda_aug_conf,
                  classes,
                  data_root,
-                 info_path,
+                 info_paths,
                  is_train,
                  use_cbgs=False,
                  num_sweeps=1,
@@ -251,9 +251,13 @@ class NuscDetDataset(Dataset):
                 default: False.
         """
         super().__init__()
-        self.infos = mmcv.load(info_path)
+        if isinstance(info_paths, list):
+            self.infos = list()
+            for info_path in info_paths:
+                self.infos.extend(mmcv.load(info_path))
+        else:
+            self.infos = mmcv.load(info_paths)
         self.is_train = is_train
-        self.split = 'train' if is_train else 'val'
         self.ida_aug_conf = ida_aug_conf
         self.bda_aug_conf = bda_aug_conf
         self.data_root = data_root
@@ -633,7 +637,7 @@ class NuscDetDataset(Dataset):
                                                cam_timestamp).argmin()
                             lidar_infos.append(info['lidar_sweeps'][lidar_idx])
                             break
-        if self.return_depth:
+        if self.return_depth or self.use_fusion:
             image_data_list = self.get_image(cam_infos, cams, lidar_infos)
 
         else:

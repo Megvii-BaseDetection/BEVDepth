@@ -21,15 +21,12 @@ bicycle 0.286   0.457   0.255   0.630   0.194   0.006
 traffic_cone    0.536   0.438   0.339   nan     nan     nan
 barrier 0.559   0.392   0.289   0.124   nan     nan
 """
-from argparse import ArgumentParser, Namespace
-
-import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 from torch.cuda.amp.autocast_mode import autocast
 from torch.optim.lr_scheduler import MultiStepLR
 
-from callbacks.ema import EMACallback
+from exps.base_cli import run_cli
 from exps.mv.bev_depth_lss_r50_256x704_128x128_24e_2key import \
     BEVDepthLightningModel as BaseBEVDepthLightningModel
 from layers.backbones.base_lss_fpn import BaseLSSFPN as BaseLSSFPN
@@ -141,49 +138,6 @@ class BEVDepthLightningModel(BaseBEVDepthLightningModel):
         return [[optimizer], [scheduler]]
 
 
-def main(args: Namespace) -> None:
-    if args.seed is not None:
-        pl.seed_everything(args.seed)
-
-    model = BEVDepthLightningModel(**vars(args))
-    train_dataloader = model.train_dataloader()
-    ema_callback = EMACallback(len(train_dataloader.dataset) * args.max_epochs)
-    trainer = pl.Trainer.from_argparse_args(args, callbacks=[ema_callback])
-    if args.evaluate:
-        trainer.test(model, ckpt_path=args.ckpt_path)
-    else:
-        trainer.fit(model)
-
-
-def run_cli():
-    parent_parser = ArgumentParser(add_help=False)
-    parent_parser = pl.Trainer.add_argparse_args(parent_parser)
-    parent_parser.add_argument('-e',
-                               '--evaluate',
-                               dest='evaluate',
-                               action='store_true',
-                               help='evaluate model on validation set')
-    parent_parser.add_argument('-b', '--batch_size_per_device', type=int)
-    parent_parser.add_argument('--seed',
-                               type=int,
-                               default=0,
-                               help='seed for initializing training.')
-    parent_parser.add_argument('--ckpt_path', type=str)
-    parser = BEVDepthLightningModel.add_model_specific_args(parent_parser)
-    parser.set_defaults(profiler='simple',
-                        deterministic=False,
-                        max_epochs=20,
-                        accelerator='ddp',
-                        num_sanity_val_steps=0,
-                        gradient_clip_val=5,
-                        limit_val_batches=0,
-                        enable_checkpointing=True,
-                        precision=16,
-                        default_root_dir='./outputs/bev_depth_lss_r50_'
-                        '256x704_128x128_20e_cbgs_2key_da')
-    args = parser.parse_args()
-    main(args)
-
-
 if __name__ == '__main__':
-    run_cli()
+    run_cli(BEVDepthLightningModel,
+            'bev_depth_lss_r50_256x704_128x128_20e_cbgs_2key_da')
