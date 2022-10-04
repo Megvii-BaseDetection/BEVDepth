@@ -395,14 +395,15 @@ class NuscDetDataset(Dataset):
         sweep_sensor2sensor_mats = list()
         sweep_timestamps = list()
         sweep_lidar_depth = list()
-        sweep_lidar_points = list()
-        for lidar_info in lidar_infos:
-            lidar_path = lidar_info['LIDAR_TOP']['filename']
-            lidar_points = np.fromfile(os.path.join(self.data_root,
-                                                    lidar_path),
-                                       dtype=np.float32,
-                                       count=-1).reshape(-1, 5)[..., :4]
-            sweep_lidar_points.append(lidar_points)
+        if self.return_depth or self.use_fusion:
+            sweep_lidar_points = list()
+            for lidar_info in lidar_infos:
+                lidar_path = lidar_info['LIDAR_TOP']['filename']
+                lidar_points = np.fromfile(os.path.join(
+                    self.data_root, lidar_path),
+                                           dtype=np.float32,
+                                           count=-1).reshape(-1, 5)[..., :4]
+                sweep_lidar_points.append(lidar_points)
         for cam in cams:
             imgs = list()
             sensor2ego_mats = list()
