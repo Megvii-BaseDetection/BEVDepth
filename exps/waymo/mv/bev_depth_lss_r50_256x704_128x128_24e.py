@@ -5,7 +5,8 @@ import torch.utils.data
 import torch.utils.data.distributed
 
 from exps.base_cli import run_cli
-from exps.base_exp import BEVDepthLightningModel as BaseBEVDepthLightningModel
+from exps.waymo.base_exp import \
+    BEVDepthLightningModel as BaseBEVDepthLightningModel
 
 
 class BEVDepthLightningModel(BaseBEVDepthLightningModel):
@@ -20,5 +21,4 @@ class BEVDepthLightningModel(BaseBEVDepthLightningModel):
 
 if __name__ == '__main__':
     run_cli(BEVDepthLightningModel,
-            'bev_depth_lss_r50_256x704_128x128_24e_ema',
-            use_ema=True)
+            'bev_depth_lss_r50_256x704_128x128_24e_ema')

@@ -1,11 +1,11 @@
 """Inherited from `https://github.com/open-mmlab/mmdetection3d/blob/master/mmdet3d/models/dense_heads/centerpoint_head.py`"""  # noqa
 import torch
 from mmdet3d.core import draw_heatmap_gaussian, gaussian_radius
+from mmdet3d.models import build_neck
 from mmdet3d.models.dense_heads.centerpoint_head import CenterHead
 from mmdet3d.models.utils import clip_sigmoid
 from mmdet.core import reduce_mean
 from mmdet.models import build_backbone
-from mmdet3d.models import build_neck
 from torch.cuda.amp import autocast
 
 __all__ = ['BEVDepthHead']
@@ -169,9 +169,10 @@ class BEVDepthHead(CenterHead):
                  feature_map_size[0]),
                 device='cuda')
 
-            anno_box = gt_bboxes_3d.new_zeros((max_objs, 10),
-                                              dtype=torch.float32,
-                                              device='cuda')
+            anno_box = gt_bboxes_3d.new_zeros(
+                (max_objs, len(self.train_cfg['code_weights'])),
+                dtype=torch.float32,
+                device='cuda')
 
             ind = gt_labels_3d.new_zeros((max_objs),
                                          dtype=torch.int64,
@@ -232,20 +233,29 @@ class BEVDepthHead(CenterHead):
                     ind[new_idx] = y * feature_map_size[0] + x
                     mask[new_idx] = 1
                     # TODO: support other outdoor dataset
-                    vx, vy = task_boxes[idx][k][7:]
+                    if len(task_boxes[idx][k]) > 7:
+                        vx, vy = task_boxes[idx][k][7:]
                     rot = task_boxes[idx][k][6]
                     box_dim = task_boxes[idx][k][3:6]
                     if self.norm_bbox:
                         box_dim = box_dim.log()
-                    anno_box[new_idx] = torch.cat([
-                        center - torch.tensor([x, y], device='cuda'),
-                        z.unsqueeze(0),
-                        box_dim,
-                        torch.sin(rot).unsqueeze(0),
-                        torch.cos(rot).unsqueeze(0),
-                        vx.unsqueeze(0),
-                        vy.unsqueeze(0),
-                    ])
+                    if len(task_boxes[idx][k]) > 7:
+                        anno_box[new_idx] = torch.cat([
+                            center - torch.tensor([x, y], device='cuda'),
+                            z.unsqueeze(0),
+                            box_dim,
+                            torch.sin(rot).unsqueeze(0),
+                            torch.cos(rot).unsqueeze(0),
+                            vx.unsqueeze(0),
+                            vy.unsqueeze(0),
+                        ])
+                    else:
+                        anno_box[new_idx] = torch.cat([
+                            center - torch.tensor([x, y], device='cuda'),
+                            z.unsqueeze(0), box_dim,
+                            torch.sin(rot).unsqueeze(0),
+                            torch.cos(rot).unsqueeze(0)
+                        ])
 
             heatmaps.append(heatmap)
             anno_boxes.append(anno_box)
@@ -279,17 +289,19 @@ class BEVDepthHead(CenterHead):
                                          avg_factor=cls_avg_factor)
             target_box = anno_boxes[task_id]
             # reconstruct the anno_box from multiple reg heads
-            preds_dict[0]['anno_box'] = torch.cat(
-                (
-                    preds_dict[0]['reg'],
-                    preds_dict[0]['height'],
-                    preds_dict[0]['dim'],
-                    preds_dict[0]['rot'],
-                    preds_dict[0]['vel'],
-                ),
-                dim=1,
-            )
-
+            if 'vel' in preds_dict[0].keys():
+                preds_dict[0]['anno_box'] = torch.cat(
+                    (preds_dict[0]['reg'], preds_dict[0]['height'],
+                     preds_dict[0]['dim'], preds_dict[0]['rot'],
+                     preds_dict[0]['vel']),
+                    dim=1,
+                )
+            else:
+                preds_dict[0]['anno_box'] = torch.cat(
+                    (preds_dict[0]['reg'], preds_dict[0]['height'],
+                     preds_dict[0]['dim'], preds_dict[0]['rot']),
+                    dim=1,
+                )
             # Regression loss for dimension, offset, height, rotation
             num = masks[task_id].float().sum()
             ind = inds[task_id]

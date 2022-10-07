@@ -7,12 +7,8 @@ import pytorch_lightning as pl
 from callbacks.ema import EMACallback
 from utils.torch_dist import all_gather_object, synchronize
 
-from .base_exp import BEVDepthLightningModel
 
-
-def run_cli(model_class=BEVDepthLightningModel,
-            exp_name='base_exp',
-            use_ema=False):
+def run_cli(model_class, exp_name='base_exp', use_ema=False):
     parent_parser = ArgumentParser(add_help=False)
     parent_parser = pl.Trainer.add_argparse_args(parent_parser)
     parent_parser.add_argument('-e',
@@ -31,7 +27,7 @@ def run_cli(model_class=BEVDepthLightningModel,
                                default=0,
                                help='seed for initializing training.')
     parent_parser.add_argument('--ckpt_path', type=str)
-    parser = BEVDepthLightningModel.add_model_specific_args(parent_parser)
+    parser = model_class.add_model_specific_args(parent_parser)
     parser.set_defaults(profiler='simple',
                         deterministic=False,
                         max_epochs=24,

@@ -22,7 +22,8 @@ traffic_cone    0.539   0.435   0.324   nan     nan     nan
 barrier 0.569   0.394   0.293   0.120   nan     nan
 """
 from exps.base_cli import run_cli
-from exps.mv.bev_depth_lss_r50_256x704_128x128_20e_cbgs_2key_da import \
+
+from .bev_depth_lss_r50_256x704_128x128_20e_cbgs_2key_da import \
     BEVDepthLightningModel
 
 if __name__ == '__main__':

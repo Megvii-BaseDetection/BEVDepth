@@ -27,11 +27,12 @@ from torch.cuda.amp.autocast_mode import autocast
 from torch.optim.lr_scheduler import MultiStepLR
 
 from exps.base_cli import run_cli
-from exps.mv.bev_depth_lss_r50_256x704_128x128_24e_2key import \
-    BEVDepthLightningModel as BaseBEVDepthLightningModel
 from layers.backbones.base_lss_fpn import BaseLSSFPN as BaseLSSFPN
 from layers.heads.bev_depth_head import BEVDepthHead
 from models.base_bev_depth import BaseBEVDepth as BaseBEVDepth
+
+from .bev_depth_lss_r50_256x704_128x128_24e_2key import \
+    BEVDepthLightningModel as BaseBEVDepthLightningModel
 
 
 class DepthAggregation(nn.Module):

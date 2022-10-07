@@ -54,20 +54,30 @@ def save_image(frame, cur_save_path, file_name, cam_names, cam_infos):
         save_path = os.path.join(cur_save_path, cam_names[frame_image.name])
         mmcv.mkdir_or_exist(save_path)
         mmcv.imwrite(img, os.path.join(save_path, file_name))
-        cam_info['pose'] = frame_image.pose
-        cam_info['velocity'] = frame_image.velocity
+        cam_info['pose'] = np.array(frame_image.pose.transform)
+        velocity = dict()
+        velocity['v_x'] = frame_image.velocity.v_x
+        velocity['v_y'] = frame_image.velocity.v_y
+        velocity['v_z'] = frame_image.velocity.v_z
+        velocity['v_x'] = frame_image.velocity.v_x
+        velocity['v_y'] = frame_image.velocity.v_y
+        velocity['v_z'] = frame_image.velocity.v_z
+        cam_info['velocity'] = velocity
         cam_info['pose_timestamp'] = frame_image.pose_timestamp
         cam_info['shutter'] = frame_image.shutter
         cam_info['cam_trigger_time'] = frame_image.camera_trigger_time
         cam_info[
             'cam_readout_done_time'] = frame_image.camera_readout_done_time
+        cam_info['filename'] = os.path.join(*save_path.split(os.sep)[-3:],
+                                            file_name)
         cam_infos[cam_names[frame_image.name]] = cam_info
     for camera in frame.context.camera_calibrations:
         # extrinsic parameters
         cam_infos[cam_names[camera.name]]['extrinsic'] = np.array(
             camera.extrinsic.transform)
         # intrinsic parameters
-        cam_infos[cam_names[camera.name]]['intrinsic'] = camera.intrinsic
+        cam_infos[cam_names[camera.name]]['intrinsic'] = np.array(
+            camera.intrinsic)
 
 
 def save_range_image(frame,
@@ -169,8 +179,12 @@ def save_range_image(frame,
             point_clouds.append(point_cloud[range_image_idx])
             range_image_idxes.append(range_image_idx)
             range_image_shapes.append(range_image_np.shape)
-        lidar_infos[lidar_names[calib.name]] = range_image_infos
+        lidar_infos[lidar_names[calib.name]] = dict()
+        lidar_infos[lidar_names[
+            calib.name]]['range_image_infos'] = range_image_infos
         save_path = os.path.join(cur_save_path, lidar_names[calib.name])
+        lidar_infos[lidar_names[calib.name]]['filename'] = os.path.join(
+            *save_path.split(os.sep)[-3:], file_name)
         mmcv.mkdir_or_exist(save_path)
 
         save_dict = dict(point_clouds=point_clouds,
@@ -349,6 +363,7 @@ def parse_waymo_samples(example_proto, idx, directory, tfrecord):
                                                      lidar_file_name)
     lidar_infos['range_image_path'] = range_image_path
     info['lidar_infos'] = lidar_infos
+    info['cam_infos'] = cam_infos
     return info
 
 
@@ -537,12 +552,36 @@ def main():
             filter(lambda x: x.endswith('.tfrecord'),
                    os.listdir(training_dir)))
         with futures.ThreadPoolExecutor(args.num_workers) as executor:
-            tfrecord_infos = list(
+            training_tfrecord_infos = list(
                 tqdm(executor.map(generate_waymo_info,
                                   [training_dir] * len(training_tfrecords),
                                   training_tfrecords),
                      total=len(training_tfrecords)))
-        return tfrecord_infos
+        waymo_infos_training = list()
+        for training_tfrecord_info in training_tfrecord_infos:
+            waymo_infos_training.extend(training_tfrecord_info)
+        mmcv.dump(
+            waymo_infos_training,
+            os.path.join('./data', 'waymo', args.dataset_version,
+                         'waymo_infos_training.pkl'))
+        validation_dir = os.path.join('./data', 'waymo', args.dataset_version,
+                                      'validation')
+        validation_tfrecords = list(
+            filter(lambda x: x.endswith('.tfrecord'),
+                   os.listdir(validation_dir)))
+        with futures.ThreadPoolExecutor(args.num_workers) as executor:
+            validation_tfrecord_infos = list(
+                tqdm(executor.map(generate_waymo_info,
+                                  [validation_dir] * len(validation_tfrecords),
+                                  validation_tfrecords),
+                     total=len(validation_tfrecords)))
+        waymo_infos_valdiation = list()
+        for validation_tfrecord_info in validation_tfrecord_infos:
+            waymo_infos_valdiation.extend(validation_tfrecord_info)
+        mmcv.dump(
+            waymo_infos_valdiation,
+            os.path.join('./data', 'waymo', args.dataset_version,
+                         'waymo_infos_validation.pkl'))
 
 
 if __name__ == '__main__':
