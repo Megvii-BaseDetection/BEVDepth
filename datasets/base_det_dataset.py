@@ -27,7 +27,8 @@ class BaseDetDataset(Dataset):
                  return_depth=False,
                  sweep_idxes=list(),
                  key_idxes=list(),
-                 use_fusion=False):
+                 use_fusion=False,
+                 lidar_keys=None):
         """Dataset used for bevdetection task.
         Args:
             ida_aug_conf (dict): Config for ida augmentation.
@@ -77,6 +78,7 @@ class BaseDetDataset(Dataset):
             'All `key_idxes` must less than 0.'
         self.key_idxes = [0] + key_idxes
         self.use_fusion = use_fusion
+        self.lidar_keys = lidar_keys
 
     def _get_sample_indices(self, name_map=None):
         """Load annotations from ann_file.
@@ -157,7 +159,7 @@ class BaseDetDataset(Dataset):
             flip_dy = False
         return rotate_bda, scale_bda, flip_dx, flip_dy
 
-    def get_image(self, cam_infos, cams, lidar_infos=None):
+    def get_image(self, cam_infos_sweeps, cams, lidar_infos_sweeps=None):
         """Given data and cam_names, return image data needed.
 
         Args:
@@ -174,7 +176,7 @@ class BaseDetDataset(Dataset):
             Tensor: timestamps.
             dict: meta infos needed for evaluation.
         """
-        assert len(cam_infos) > 0
+        assert len(cam_infos_sweeps) > 0
         sweep_imgs = list()
         sweep_sensor2ego_mats = list()
         sweep_intrin_mats = list()
@@ -184,7 +186,7 @@ class BaseDetDataset(Dataset):
         sweep_lidar_depth = list()
         if self.return_depth or self.use_fusion:
             sweep_lidar_points = list()
-            for lidar_info in lidar_infos:
+            for lidar_info in lidar_infos_sweeps:
                 lidar_path = lidar_info['LIDAR_TOP']['filename']
                 lidar_points = np.fromfile(os.path.join(
                     self.data_root, lidar_path),
@@ -199,11 +201,11 @@ class BaseDetDataset(Dataset):
             sensor2sensor_mats = list()
             timestamps = list()
             lidar_depth = list()
-            key_info = cam_infos[0]
+            key_info = cam_infos_sweeps[0]
             resize, resize_dims, crop, flip, \
                 rotate_ida = self.sample_ida_augmentation(
                     )
-            for sweep_idx, cam_info in enumerate(cam_infos):
+            for sweep_idx, cam_info in enumerate(cam_infos_sweeps):
 
                 img = Image.open(
                     os.path.join(self.data_root, cam_info[cam]['filename']))
@@ -267,7 +269,7 @@ class BaseDetDataset(Dataset):
                 if self.return_depth and (self.use_fusion or sweep_idx == 0):
                     point_depth = self.get_lidar_depth(
                         sweep_lidar_points[sweep_idx], img,
-                        lidar_infos[sweep_idx], cam_info[cam])
+                        lidar_infos_sweeps[sweep_idx], cam_info[cam])
                     point_depth_augmented = depth_transform(
                         point_depth, resize, self.ida_aug_conf['final_dim'],
                         crop, flip, rotate_ida)

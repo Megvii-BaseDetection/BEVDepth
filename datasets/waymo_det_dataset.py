@@ -7,12 +7,41 @@ from mmdet3d.core.bbox.structures.lidar_box3d import LiDARInstance3DBoxes
 from PIL import Image
 
 from .base_det_dataset import BaseDetDataset
-from .utils import bev_transform, img_transform
+from .utils import bev_transform, depth_transform, img_transform
 
 __all__ = ['WaymoDetDataset']
 
 
 class WaymoDetDataset(BaseDetDataset):
+    def get_lidar_depth(self, lidar_points, img, lidar_info, cam_info):
+        ego2sensor = np.linalg.inv(cam_info['extrinsic'].reshape(4, 4))
+        lidar_coords = np.ones_like(lidar_points,
+                                    shape=(lidar_points.shape[0], 4))
+        lidar_coords[:, :3] = lidar_points[:, :3]
+        sensor_coords = ego2sensor.dot(lidar_coords[:, :,
+                                                    np.newaxis]).transpose(
+                                                        1, 0, 2)
+        intrin_mat = np.ones_like(lidar_points, shape=(3, 3))
+        intrin_mat[0, 0] = cam_info['intrinsic'][0]
+        intrin_mat[1, 1] = cam_info['intrinsic'][1]
+        intrin_mat[0, 2] = cam_info['intrinsic'][2]
+        intrin_mat[1, 2] = cam_info['intrinsic'][3]
+        intrin_mat[2, 2] = 1
+        img_coords = intrin_mat.dot(sensor_coords[:, :3, :]).transpose(
+            1, 0, 2).squeeze(-1)[:, :3]
+        img_coords[:, :2] /= img_coords[:, 2:]
+        mask = np.ones(img_coords.shape[0], dtype=bool)
+        mask = np.logical_and(mask, img_coords[:, 2] > 0)
+        mask = np.logical_and(mask, img_coords[:, 0] > 1)
+        mask = np.logical_and(mask, img_coords[:, 0] < img.size[0] - 1)
+        mask = np.logical_and(mask, img_coords[:, 1] > 1)
+        mask = np.logical_and(mask, img_coords[:, 1] < img.size[1] - 1)
+        depth = np.zeros_like(lidar_points, shape=(img.size[1], img.size[0]))
+        valid_points = img_coords[mask]
+        depth[valid_points[:, 1].astype(np.int),
+              valid_points[:, 0].astype(np.int)] = valid_points[:, 2]
+        return depth
+
     def get_image(self, cam_infos_sweeps, cams, lidar_infos_sweeps=None):
         """Given data and cam_names, return image data needed.
 
@@ -37,15 +66,19 @@ class WaymoDetDataset(BaseDetDataset):
         sweep_ida_mats = list()
         sweep_sensor2sensor_mats = list()
         sweep_timestamps = list()
-        # if self.return_depth or self.use_fusion:
-        #     sweep_lidar_points = list()
-        #     for lidar_info in lidar_infos:
-        #         lidar_path = lidar_info['LIDAR_TOP']['filename']
-        #         lidar_points = np.fromfile(os.path.join(
-        #             self.data_root, lidar_path),
-        #                                    dtype=np.float32,
-        #                                    count=-1).reshape(-1, 5)[..., :4]
-        #         sweep_lidar_points.append(lidar_points)
+        sweep_lidar_points = list()
+        sweep_lidar_depth = list()
+        if self.return_depth or self.use_fusion:
+            for lidar_infos in lidar_infos_sweeps:
+                lidar_points = []
+                for lidar_key in self.lidar_keys:
+                    range_image = mmcv.load(
+                        os.path.join(self.data_root,
+                                     lidar_infos[lidar_key]['filename']))
+                    lidar_points.extend(range_image['point_clouds'])
+                lidar_points = np.concatenate(lidar_points, axis=0)
+                lidar_points = lidar_points.astype(np.float32)[:, :5]
+                sweep_lidar_points.append(lidar_points)
         for cam in cams:
             imgs = list()
             sensor2ego_mats = list()
@@ -53,6 +86,7 @@ class WaymoDetDataset(BaseDetDataset):
             ida_mats = list()
             sensor2sensor_mats = list()
             timestamps = list()
+            lidar_depth = list()
             key_info = cam_infos_sweeps[0]
             resize, resize_dims, crop, flip, \
                 rotate_ida = self.sample_ida_augmentation(
@@ -82,8 +116,19 @@ class WaymoDetDataset(BaseDetDataset):
                     torch.from_numpy(keysensor2sweepsensor))
                 intrin_mat = torch.zeros((4, 4))
                 intrin_mat[3, 3] = 1
-                intrin_mat[:3, :3] = torch.Tensor(
-                    cam_info[cam]['intrinsic'].reshape(3, 3))
+                intrin_mat[0, 0] = cam_info[cam]['intrinsic'][0]
+                intrin_mat[1, 1] = cam_info[cam]['intrinsic'][1]
+                intrin_mat[0, 2] = cam_info[cam]['intrinsic'][2]
+                intrin_mat[1, 2] = cam_info[cam]['intrinsic'][3]
+                intrin_mat[2, 2] = 1
+                if self.return_depth and (self.use_fusion or sweep_idx == 0):
+                    point_depth = self.get_lidar_depth(
+                        sweep_lidar_points[sweep_idx], img,
+                        lidar_infos_sweeps[sweep_idx], cam_info[cam])
+                    point_depth_augmented = depth_transform(
+                        point_depth, resize, self.ida_aug_conf['final_dim'],
+                        crop, flip, rotate_ida)
+                    lidar_depth.append(point_depth_augmented)
                 img, ida_mat = img_transform(
                     img,
                     resize=resize,
@@ -105,6 +150,8 @@ class WaymoDetDataset(BaseDetDataset):
             sweep_ida_mats.append(torch.stack(ida_mats))
             sweep_sensor2sensor_mats.append(torch.stack(sensor2sensor_mats))
             sweep_timestamps.append(torch.tensor(timestamps))
+            if self.return_depth:
+                sweep_lidar_depth.append(torch.stack(lidar_depth))
         img_metas = dict(box_type_3d=LiDARInstance3DBoxes)
 
         ret_list = [
@@ -116,6 +163,8 @@ class WaymoDetDataset(BaseDetDataset):
             torch.stack(sweep_timestamps).permute(1, 0),
             img_metas,
         ]
+        if self.return_depth:
+            ret_list.append(torch.stack(sweep_lidar_depth).permute(1, 0, 2, 3))
         return ret_list
 
     def get_gt(self, info, cams):
@@ -220,8 +269,8 @@ class WaymoDetDataset(BaseDetDataset):
             gt_boxes,
             gt_labels,
         ]
-        # if self.return_depth:
-        #     ret_list.append(image_data_list[7])
+        if self.return_depth:
+            ret_list.append(image_data_list[7])
         return ret_list
 
     def __str__(self):

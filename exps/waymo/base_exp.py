@@ -18,6 +18,7 @@ from evaluators.det_evaluators import DetNuscEvaluator
 from models.base_bev_depth import BaseBEVDepth
 from utils.torch_dist import all_gather_object, get_rank, synchronize
 
+LIDAR_KEYS = ['TOP', 'FRONT', 'SIDE_LEFT', 'SIDE_RIGHT', 'REAR']
 H = 1280
 W = 1920
 final_dim = (256, 704)
@@ -195,7 +196,7 @@ class BEVDepthLightningModel(LightningModule):
         self.num_sweeps = 1
         self.sweep_idxes = list()
         self.key_idxes = list()
-        self.data_return_depth = False
+        self.data_return_depth = True
         self.downsample_factor = self.backbone_conf['downsample_factor']
         self.dbound = self.backbone_conf['d_bound']
         self.depth_channels = int(
@@ -204,12 +205,13 @@ class BEVDepthLightningModel(LightningModule):
         self.train_info_paths = 'data/waymo/v1.4/waymo_infos_training.pkl'
         self.val_info_paths = 'data/waymo/v1.4/waymo_infos_validation.pkl'
         # self.predict_info_paths = 'data/waymo/v1.4/waymo_infos_train.pkl'
+        self.lidar_keys = LIDAR_KEYS
 
     def forward(self, sweep_imgs, mats):
         return self.model(sweep_imgs, mats)
 
     def training_step(self, batch):
-        (sweep_imgs, mats, _, _, gt_boxes, gt_labels) = batch
+        (sweep_imgs, mats, _, _, gt_boxes, gt_labels, lidar_depth) = batch
         if torch.cuda.is_available():
             for key, value in mats.items():
                 mats[key] = value.cuda()
@@ -223,8 +225,13 @@ class BEVDepthLightningModel(LightningModule):
         else:
             targets = self.model.get_targets(gt_boxes, gt_labels)
             detection_loss = self.model.loss(targets, preds)
+        if len(lidar_depth.shape) == 5:
+            # only key-frame will calculate depth loss
+            lidar_depth = lidar_depth[:, 0, ...]
+        depth_loss = self.get_depth_loss(lidar_depth.cuda(), depth_preds)
         self.log('detection_loss', detection_loss)
-        return detection_loss
+        self.log('depth_loss', depth_loss)
+        return detection_loss + depth_loss
 
     def get_depth_loss(self, depth_labels, depth_preds):
         depth_labels = self.get_downsampled_gt_depth(depth_labels)
@@ -356,7 +363,8 @@ class BEVDepthLightningModel(LightningModule):
                                         sweep_idxes=self.sweep_idxes,
                                         key_idxes=self.key_idxes,
                                         return_depth=self.data_return_depth,
-                                        use_fusion=self.use_fusion)
+                                        use_fusion=self.use_fusion,
+                                        lidar_keys=self.lidar_keys)
 
         train_loader = torch.utils.data.DataLoader(
             train_dataset,
@@ -383,7 +391,8 @@ class BEVDepthLightningModel(LightningModule):
                                       sweep_idxes=self.sweep_idxes,
                                       key_idxes=self.key_idxes,
                                       return_depth=self.use_fusion,
-                                      use_fusion=self.use_fusion)
+                                      use_fusion=self.use_fusion,
+                                      lidar_keys=self.lidar_keys)
         val_loader = torch.utils.data.DataLoader(
             val_dataset,
             batch_size=self.batch_size_per_device,
