@@ -160,14 +160,13 @@ class WaymoDetDataset(BaseDetDataset):
             torch.stack(sweep_intrin_mats).permute(1, 0, 2, 3),
             torch.stack(sweep_ida_mats).permute(1, 0, 2, 3),
             torch.stack(sweep_sensor2sensor_mats).permute(1, 0, 2, 3),
-            torch.stack(sweep_timestamps).permute(1, 0),
-            img_metas,
+            torch.stack(sweep_timestamps).permute(1, 0), img_metas
         ]
         if self.return_depth:
             ret_list.append(torch.stack(sweep_lidar_depth).permute(1, 0, 2, 3))
         return ret_list
 
-    def get_gt(self, info, cams):
+    def get_gt(self, info, cams, img_metas):
         """Generate gt labels from info.
 
         Args:
@@ -180,14 +179,22 @@ class WaymoDetDataset(BaseDetDataset):
         """
         gt_boxes = list()
         gt_labels = list()
-        for gt_box3d, gt_class3d in zip(info['gt_boxes3d'],
-                                        info['gt_classes3d']):
+        gt_classes3d = list()
+        num_points_in_gt = list()
+        difficultys = list()
+        for i, (gt_box3d, gt_class3d) in enumerate(
+                zip(info['gt_boxes3d'], info['gt_classes3d'])):
             # Use ego coordinate.
             if (gt_class3d not in self.classes):
                 continue
             gt_boxes.append(gt_box3d)
             gt_labels.append(self.classes.index(gt_class3d))
-        return torch.Tensor(gt_boxes), torch.tensor(gt_labels)
+            gt_classes3d.append(gt_class3d)
+            num_points_in_gt.append(info['num_points_in_gt'][i])
+            difficultys.append(info['difficultys'][i])
+        img_metas['num_points_in_gt'] = np.array(num_points_in_gt)
+        img_metas['difficultys'] = np.array(difficultys)
+        return torch.Tensor(gt_boxes), torch.tensor(gt_labels), gt_classes3d
 
     def choose_cams(self):
         """Choose cameras randomly.
@@ -243,13 +250,8 @@ class WaymoDetDataset(BaseDetDataset):
             sweep_timestamps,
             img_metas,
         ) = image_data_list[:7]
-        if self.is_train:
-            gt_boxes, gt_labels = self.get_gt(self.infos[idx], cams)
-        # Temporary solution for test.
-        else:
-            gt_boxes = sweep_imgs.new_zeros(0, 7)
-            gt_labels = sweep_imgs.new_zeros(0, )
-
+        gt_boxes, gt_labels, gt_classes3d = self.get_gt(
+            self.infos[idx], cams, img_metas)
         rotate_bda, scale_bda, flip_dx, flip_dy = self.sample_bda_augmentation(
         )
         bda_mat = sweep_imgs.new_zeros(4, 4)
@@ -258,16 +260,9 @@ class WaymoDetDataset(BaseDetDataset):
                                           flip_dx, flip_dy)
         bda_mat[:3, :3] = bda_rot
         ret_list = [
-            sweep_imgs,
-            sweep_sensor2ego_mats,
-            sweep_intrins,
-            sweep_ida_mats,
-            sweep_sensor2sensor_mats,
-            bda_mat,
-            sweep_timestamps,
-            img_metas,
-            gt_boxes,
-            gt_labels,
+            sweep_imgs, sweep_sensor2ego_mats, sweep_intrins, sweep_ida_mats,
+            sweep_sensor2sensor_mats, bda_mat, sweep_timestamps, img_metas,
+            gt_boxes, gt_labels, gt_classes3d
         ]
         if self.return_depth:
             ret_list.append(image_data_list[7])
@@ -295,6 +290,7 @@ def collate_fn(data, is_return_depth=False):
     timestamps_batch = list()
     gt_boxes_batch = list()
     gt_labels_batch = list()
+    gt_classes3d_batch = list()
     img_metas_batch = list()
     depth_labels_batch = list()
     for iter_data in data:
@@ -309,9 +305,10 @@ def collate_fn(data, is_return_depth=False):
             img_metas,
             gt_boxes,
             gt_labels,
-        ) = iter_data[:10]
+            gt_classes3d,
+        ) = iter_data[:11]
         if is_return_depth:
-            gt_depth = iter_data[10]
+            gt_depth = iter_data[11]
             depth_labels_batch.append(gt_depth)
         imgs_batch.append(sweep_imgs)
         sensor2ego_mats_batch.append(sweep_sensor2ego_mats)
@@ -323,6 +320,7 @@ def collate_fn(data, is_return_depth=False):
         img_metas_batch.append(img_metas)
         gt_boxes_batch.append(gt_boxes)
         gt_labels_batch.append(gt_labels)
+        gt_classes3d_batch.append(gt_classes3d)
     mats_dict = dict()
     mats_dict['sensor2ego_mats'] = torch.stack(sensor2ego_mats_batch)
     mats_dict['intrin_mats'] = torch.stack(intrin_mats_batch)
@@ -330,12 +328,9 @@ def collate_fn(data, is_return_depth=False):
     mats_dict['sensor2sensor_mats'] = torch.stack(sensor2sensor_mats_batch)
     mats_dict['bda_mat'] = torch.stack(bda_mat_batch)
     ret_list = [
-        torch.stack(imgs_batch),
-        mats_dict,
-        torch.stack(timestamps_batch),
-        img_metas_batch,
-        gt_boxes_batch,
-        gt_labels_batch,
+        torch.stack(imgs_batch), mats_dict,
+        torch.stack(timestamps_batch), img_metas_batch, gt_boxes_batch,
+        gt_labels_batch, gt_classes3d_batch
     ]
     if is_return_depth:
         ret_list.append(torch.stack(depth_labels_batch))

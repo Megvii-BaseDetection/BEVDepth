@@ -12,9 +12,8 @@ from pytorch_lightning.core import LightningModule
 from torch.cuda.amp.autocast_mode import autocast
 from torch.optim.lr_scheduler import MultiStepLR
 
-from datasets.base_det_dataset import collate_fn
-from datasets.waymo_det_dataset import WaymoDetDataset
-from evaluators.det_evaluators import DetNuscEvaluator
+from datasets.waymo_det_dataset import WaymoDetDataset, collate_fn
+from evaluators.waymo_det_evaluator import DetWaymoEvaluator
 from models.base_bev_depth import BaseBEVDepth
 from utils.torch_dist import all_gather_object, get_rank, synchronize
 
@@ -109,7 +108,7 @@ bbox_coder = dict(
     out_size_factor=1,
     voxel_size=[0.32, 0.32, 6.0],
     pc_range=[-74.88, -74.88, -2, 74.88, 74.88, 4.0],
-    code_size=9,
+    code_size=7,
 )
 
 train_cfg = dict(
@@ -177,7 +176,7 @@ class BEVDepthLightningModel(LightningModule):
         self.eval_interval = eval_interval
         self.batch_size_per_device = batch_size_per_device
         self.data_root = data_root
-        self.basic_lr_per_img = 2e-4 / 64
+        self.basic_lr_per_img = 2e-4 / 18
         self.class_names = class_names
         self.backbone_conf = backbone_conf
         self.head_conf = head_conf
@@ -185,8 +184,7 @@ class BEVDepthLightningModel(LightningModule):
         self.bda_aug_conf = bda_aug_conf
         mmcv.mkdir_or_exist(default_root_dir)
         self.default_root_dir = default_root_dir
-        self.evaluator = DetNuscEvaluator(class_names=self.class_names,
-                                          output_dir=self.default_root_dir)
+        self.evaluator = DetWaymoEvaluator(class_names=self.class_names)
         self.model = BaseBEVDepth(self.backbone_conf,
                                   self.head_conf,
                                   is_train_depth=True)
@@ -211,7 +209,7 @@ class BEVDepthLightningModel(LightningModule):
         return self.model(sweep_imgs, mats)
 
     def training_step(self, batch):
-        (sweep_imgs, mats, _, _, gt_boxes, gt_labels, lidar_depth) = batch
+        (sweep_imgs, mats, _, _, gt_boxes, gt_labels, _, lidar_depth) = batch
         if torch.cuda.is_available():
             for key, value in mats.items():
                 mats[key] = value.cuda()
@@ -286,7 +284,7 @@ class BEVDepthLightningModel(LightningModule):
         return gt_depths.float()
 
     def eval_step(self, batch, batch_idx, prefix: str):
-        (sweep_imgs, mats, _, img_metas, _, _) = batch
+        (sweep_imgs, mats, _, img_metas, gt_boxes, _, gt_classes3d) = batch
         if torch.cuda.is_available():
             for key, value in mats.items():
                 mats[key] = value.cuda()
@@ -301,45 +299,28 @@ class BEVDepthLightningModel(LightningModule):
             results[i][1] = results[i][1].detach().cpu().numpy()
             results[i][2] = results[i][2].detach().cpu().numpy()
             results[i].append(img_metas[i])
+            results[i].append(gt_boxes[i].detach().cpu().numpy())
+            results[i].append(gt_classes3d[i])
         return results
 
-    def validation_step(self, batch, batch_idx):
-        return self.eval_step(batch, batch_idx, 'val')
-
-    def validation_epoch_end(self, validation_step_outputs):
-        all_pred_results = list()
-        all_img_metas = list()
-        for validation_step_output in validation_step_outputs:
-            for i in range(len(validation_step_output)):
-                all_pred_results.append(validation_step_output[i][:3])
-                all_img_metas.append(validation_step_output[i][3])
-        synchronize()
-        len_dataset = len(self.val_dataloader().dataset)
-        all_pred_results = sum(
-            map(list, zip(*all_gather_object(all_pred_results))),
-            [])[:len_dataset]
-        all_img_metas = sum(map(list, zip(*all_gather_object(all_img_metas))),
-                            [])[:len_dataset]
-        if get_rank() == 0:
-            self.evaluator.evaluate(all_pred_results, all_img_metas)
-
     def test_epoch_end(self, test_step_outputs):
-        all_pred_results = list()
-        all_img_metas = list()
+        prediction_infos = list()
+        gt_infos = list()
         for test_step_output in test_step_outputs:
             for i in range(len(test_step_output)):
-                all_pred_results.append(test_step_output[i][:3])
-                all_img_metas.append(test_step_output[i][3])
+                prediction_infos.append(test_step_output[i][:3])
+                gt_infos.append(test_step_output[i][3:])
         synchronize()
         # TODO: Change another way.
         dataset_length = len(self.val_dataloader().dataset)
-        all_pred_results = sum(
-            map(list, zip(*all_gather_object(all_pred_results))),
+        prediction_infos = sum(
+            map(list, zip(*all_gather_object(prediction_infos))),
             [])[:dataset_length]
-        all_img_metas = sum(map(list, zip(*all_gather_object(all_img_metas))),
-                            [])[:dataset_length]
+        gt_infos = sum(map(list, zip(*all_gather_object(gt_infos))),
+                       [])[:dataset_length]
         if get_rank() == 0:
-            self.evaluator.evaluate(all_pred_results, all_img_metas)
+            results = self.evaluator.evaluate(prediction_infos, gt_infos)
+        print(results)
 
     def configure_optimizers(self):
         lr = self.basic_lr_per_img * \

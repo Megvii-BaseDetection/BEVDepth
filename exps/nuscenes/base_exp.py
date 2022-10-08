@@ -14,7 +14,7 @@ from torch.optim.lr_scheduler import MultiStepLR
 
 from datasets.base_det_dataset import collate_fn
 from datasets.nusc_det_dataset import NuscDetDataset
-from evaluators.det_evaluators import DetNuscEvaluator
+from evaluators.nusc_det_evaluator import DetNuscEvaluator
 from models.base_bev_depth import BaseBEVDepth
 from utils.torch_dist import all_gather_object, get_rank, synchronize
 

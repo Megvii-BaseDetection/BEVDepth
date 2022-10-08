@@ -21,4 +21,4 @@ class BEVDepthLightningModel(BaseBEVDepthLightningModel):
 
 if __name__ == '__main__':
     run_cli(BEVDepthLightningModel,
-            'bev_depth_lss_r50_256x704_128x128_24e_ema')
+            'bev_depth_lss_r50_256x704_128x128_24e_waymo')
