@@ -14,7 +14,7 @@ __all__ = ['WaymoDetDataset']
 
 class WaymoDetDataset(BaseDetDataset):
     def get_lidar_depth(self, lidar_points, img, lidar_info, cam_info):
-        ego2sensor = np.linalg.inv(cam_info['extrinsic'].reshape(4, 4))
+        ego2sensor = np.linalg.inv(cam_info['sensor2ego'])
         lidar_coords = np.ones_like(lidar_points,
                                     shape=(lidar_points.shape[0], 4))
         lidar_coords[:, :3] = lidar_points[:, :3]
@@ -79,6 +79,10 @@ class WaymoDetDataset(BaseDetDataset):
                 lidar_points = np.concatenate(lidar_points, axis=0)
                 lidar_points = lidar_points.astype(np.float32)[:, :5]
                 sweep_lidar_points.append(lidar_points)
+        T_front_cam_to_ref = np.array([[0.0, -1.0, 0.0, 0.0],
+                                       [0.0, 0.0, -1.0, 0.0],
+                                       [1.0, 0.0, 0.0, 0.0],
+                                       [0.0, 0.0, 0.0, 1.0]])
         for cam in cams:
             imgs = list()
             sensor2ego_mats = list()
@@ -96,7 +100,9 @@ class WaymoDetDataset(BaseDetDataset):
                 img = Image.open(
                     os.path.join(self.data_root, cam_info[cam]['filename']))
                 # sweep sensor to sweep ego
-                sweepsensor2sweepego = cam_info[cam]['extrinsic'].reshape(4, 4)
+                sweepsensor2sweepego = np.linalg.inv(
+                    T_front_cam_to_ref @ np.linalg.inv(
+                        cam_info[cam]['extrinsic'].reshape(4, 4)))
                 # sweep ego to global
                 sweepego2global = cam_info['ref_pose']
 
@@ -104,7 +110,9 @@ class WaymoDetDataset(BaseDetDataset):
                 global2keyego = np.linalg.inv(key_info['ref_pose'])
 
                 # key ego to key sensor
-                keysensor2keyego = key_info[cam]['extrinsic'].reshape(4, 4)
+                keysensor2keyego = np.linalg.inv(
+                    T_front_cam_to_ref @ np.linalg.inv(
+                        key_info[cam]['extrinsic'].reshape(4, 4)))
                 keyego2keysensor = np.linalg.inv(keysensor2keyego)
                 keysensor2sweepsensor = np.linalg.inv(
                     keyego2keysensor @ global2keyego @ sweepego2global
@@ -121,6 +129,7 @@ class WaymoDetDataset(BaseDetDataset):
                 intrin_mat[0, 2] = cam_info[cam]['intrinsic'][2]
                 intrin_mat[1, 2] = cam_info[cam]['intrinsic'][3]
                 intrin_mat[2, 2] = 1
+                cam_info[cam]['sensor2ego'] = sweepsensor2sweepego
                 if self.return_depth and (self.use_fusion or sweep_idx == 0):
                     point_depth = self.get_lidar_depth(
                         sweep_lidar_points[sweep_idx], img,
