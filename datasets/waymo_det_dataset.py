@@ -189,7 +189,11 @@ class WaymoDetDataset(BaseDetDataset):
         for i, (gt_box3d, gt_class3d) in enumerate(
                 zip(info['gt_boxes3d'], info['gt_classes3d'])):
             # Use ego coordinate.
-            if (gt_class3d not in self.classes):
+            # Temporary solution for masking gt_boxes that
+            # cameras are unable to see.
+            if (gt_class3d not in self.classes) or (
+                    self.is_train and gt_box3d[0] < 0
+                    and np.abs(gt_box3d[1]) / gt_box3d[0] < np.sqrt(3)):
                 continue
             gt_boxes.append(gt_box3d)
             gt_labels.append(self.classes.index(gt_class3d))

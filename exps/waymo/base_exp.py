@@ -176,7 +176,7 @@ class BEVDepthLightningModel(LightningModule):
         self.eval_interval = eval_interval
         self.batch_size_per_device = batch_size_per_device
         self.data_root = data_root
-        self.basic_lr_per_img = 2e-4 / 18
+        self.basic_lr_per_img = 2e-4 / 64
         self.class_names = class_names
         self.backbone_conf = backbone_conf
         self.head_conf = head_conf
