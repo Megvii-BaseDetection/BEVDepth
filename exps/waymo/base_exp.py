@@ -102,17 +102,17 @@ common_heads = dict(reg=(2, 2), height=(1, 2), dim=(3, 2), rot=(2, 2))
 
 bbox_coder = dict(
     type='CenterPointBBoxCoder',
-    post_center_range=[-80, -80, -10.0, 80, 80, 10.0],
+    post_center_range=[-70, -70, -10.0, 70, 70, 10.0],
     max_num=500,
     score_threshold=0.01,
     out_size_factor=1,
     voxel_size=[0.32, 0.32, 6.0],
-    pc_range=[-74.88, -74.88, -2, 74.88, 74.88, 4.0],
+    pc_range=[-64, -64, -2, 64, 64, 4.0],
     code_size=7,
 )
 
 train_cfg = dict(
-    point_cloud_range=[-64, -64, -2, 64, 74.88, 4.0],
+    point_cloud_range=[-64, -64, -2, 64, 64, 4.0],
     grid_size=[400, 400, 1],
     voxel_size=[0.32, 0.32, 6.0],
     out_size_factor=1,
@@ -127,7 +127,7 @@ test_cfg = dict(
     post_center_limit_range=[-70, -70, -10.0, 70, 70, 10.0],
     max_per_img=500,
     max_pool_nms=False,
-    min_radius=[0.1, 0.1, 0.1, 1, 0.85, 0.175],
+    min_radius=[1, 0.1],
     score_threshold=0.01,
     out_size_factor=1,
     voxel_size=[0.32, 0.32, 6],

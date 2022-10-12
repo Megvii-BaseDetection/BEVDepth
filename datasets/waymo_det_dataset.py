@@ -33,12 +33,9 @@ class WaymoDetDataset(BaseDetDataset):
         mask = np.logical_and(mask, img_coords[:, 0] < img.size[0] - 1)
         mask = np.logical_and(mask, img_coords[:, 1] > 1)
         mask = np.logical_and(mask, img_coords[:, 1] < img.size[1] - 1)
-        depth = np.zeros_like(lidar_points, shape=(img.size[1], img.size[0]))
         valid_points = img_coords[mask]
-        depth[valid_points[:, 1].astype(np.int),
-              valid_points[:, 0].astype(np.int)] = valid_points[:, 2]
 
-        return depth
+        return valid_points
 
     def get_image(self, cam_infos_sweeps, cams, lidar_infos_sweeps=None):
         """Given data and cam_names, return image data needed.
