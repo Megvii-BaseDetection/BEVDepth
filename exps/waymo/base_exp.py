@@ -15,7 +15,7 @@ from torch.optim.lr_scheduler import MultiStepLR
 from datasets.waymo_det_dataset import WaymoDetDataset, collate_fn
 from evaluators.waymo_det_evaluator import DetWaymoEvaluator
 from models.base_bev_depth import BaseBEVDepth
-from utils.torch_dist import all_gather_object, get_rank, synchronize
+from utils.torch_dist import all_gather_object, synchronize
 
 LIDAR_KEYS = ['TOP', 'FRONT', 'SIDE_LEFT', 'SIDE_RIGHT', 'REAR']
 H = 1280
@@ -104,7 +104,7 @@ bbox_coder = dict(
     type='CenterPointBBoxCoder',
     post_center_range=[-80, -80, -10.0, 80, 80, 10.0],
     max_num=500,
-    score_threshold=0.1,
+    score_threshold=0.01,
     out_size_factor=1,
     voxel_size=[0.32, 0.32, 6.0],
     pc_range=[-74.88, -74.88, -2, 74.88, 74.88, 4.0],
@@ -124,11 +124,11 @@ train_cfg = dict(
 )
 
 test_cfg = dict(
-    post_center_limit_range=[-61.2, -61.2, -10.0, 61.2, 61.2, 10.0],
+    post_center_limit_range=[-70, -70, -10.0, 70, 70, 10.0],
     max_per_img=500,
     max_pool_nms=False,
-    min_radius=[4, 12, 10, 1, 0.85, 0.175],
-    score_threshold=0.1,
+    min_radius=[0.1, 0.1, 0.1, 1, 0.85, 0.175],
+    score_threshold=0.01,
     out_size_factor=1,
     voxel_size=[0.32, 0.32, 6],
     nms_type='circle',
@@ -318,8 +318,7 @@ class BEVDepthLightningModel(LightningModule):
             [])[:dataset_length]
         gt_infos = sum(map(list, zip(*all_gather_object(gt_infos))),
                        [])[:dataset_length]
-        if get_rank() == 0:
-            results = self.evaluator.evaluate(prediction_infos, gt_infos)
+        results = self.evaluator.evaluate(prediction_infos, gt_infos)
         print(results)
 
     def configure_optimizers(self):

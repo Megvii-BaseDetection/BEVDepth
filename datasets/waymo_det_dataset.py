@@ -18,17 +18,14 @@ class WaymoDetDataset(BaseDetDataset):
         lidar_coords = np.ones_like(lidar_points,
                                     shape=(lidar_points.shape[0], 4))
         lidar_coords[:, :3] = lidar_points[:, :3]
-        sensor_coords = ego2sensor.dot(lidar_coords[:, :,
-                                                    np.newaxis]).transpose(
-                                                        1, 0, 2)
-        intrin_mat = np.ones_like(lidar_points, shape=(3, 3))
+        sensor_coords = ego2sensor @ lidar_coords[:, :, np.newaxis]
+        intrin_mat = np.zeros_like(lidar_points, shape=(3, 3))
         intrin_mat[0, 0] = cam_info['intrinsic'][0]
         intrin_mat[1, 1] = cam_info['intrinsic'][1]
         intrin_mat[0, 2] = cam_info['intrinsic'][2]
         intrin_mat[1, 2] = cam_info['intrinsic'][3]
         intrin_mat[2, 2] = 1
-        img_coords = intrin_mat.dot(sensor_coords[:, :3, :]).transpose(
-            1, 0, 2).squeeze(-1)[:, :3]
+        img_coords = (intrin_mat @ sensor_coords[:, :3, :]).squeeze(-1)[:, :3]
         img_coords[:, :2] /= img_coords[:, 2:]
         mask = np.ones(img_coords.shape[0], dtype=bool)
         mask = np.logical_and(mask, img_coords[:, 2] > 0)
@@ -40,6 +37,7 @@ class WaymoDetDataset(BaseDetDataset):
         valid_points = img_coords[mask]
         depth[valid_points[:, 1].astype(np.int),
               valid_points[:, 0].astype(np.int)] = valid_points[:, 2]
+
         return depth
 
     def get_image(self, cam_infos_sweeps, cams, lidar_infos_sweeps=None):
@@ -203,6 +201,8 @@ class WaymoDetDataset(BaseDetDataset):
             difficultys.append(info['difficultys'][i])
         img_metas['num_points_in_gt'] = np.array(num_points_in_gt)
         img_metas['difficultys'] = np.array(difficultys)
+        if len(gt_boxes) == 0:
+            return torch.zeros((0, 7)), torch.zeros((0)), gt_classes3d
         return torch.Tensor(gt_boxes), torch.tensor(gt_labels), gt_classes3d
 
     def choose_cams(self):
