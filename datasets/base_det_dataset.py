@@ -116,9 +116,12 @@ class BaseDetDataset(Dataset):
                                                    ratio)).tolist()
         return sample_indices
 
-    def sample_ida_augmentation(self):
+    def sample_ida_augmentation(self, H=None, W=None):
         """Generate ida augmentation values based on ida_config."""
-        H, W = self.ida_aug_conf['H'], self.ida_aug_conf['W']
+        if H is None:
+            H = self.ida_aug_conf['H']
+        if W is None:
+            W = self.ida_aug_conf['W']
         fH, fW = self.ida_aug_conf['final_dim']
         if self.is_train:
             resize = np.random.uniform(*self.ida_aug_conf['resize_lim'])

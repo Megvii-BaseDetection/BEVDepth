@@ -95,8 +95,8 @@ class DetWaymoEvaluator(tf.test.TestCase):
         frame_id, boxes3d, obj_type, score, overlap_nlz, difficulty \
             = [], [], [], [], [], []
         for frame_index, info in enumerate(infos):
-            img_metas, gt_boxes3d, gt_classes3d = info
             if is_gt:
+                img_metas, gt_boxes3d, gt_classes3d = info
                 box_mask = np.array([n in class_names for n in gt_classes3d],
                                     dtype=np.bool_)
                 if 'num_points_in_gt' in img_metas:
@@ -122,9 +122,9 @@ class DetWaymoEvaluator(tf.test.TestCase):
                 num_boxes = box_mask.sum()
                 gt_classes3d = np.array(gt_classes3d)[box_mask]
                 box_name = np.array([
-                    self.class_names.index(gt_class3d)
+                    self.WAYMO_CLASSES.index(gt_class3d)
                     for gt_class3d in gt_classes3d
-                ])
+                ])[box_mask]
                 difficulty.append(img_metas['difficultys'][box_mask])
                 score.append(np.ones(num_boxes))
 
@@ -136,7 +136,9 @@ class DetWaymoEvaluator(tf.test.TestCase):
                 # scores3d
                 score.append(info[1])
                 boxes3d.append(info[0])
-                box_name = info[2]
+                box_name = np.array([
+                    self.WAYMO_CLASSES.index(class_id) for class_id in info[2]
+                ])
 
             obj_type.append(box_name)
             frame_id.append(np.array([frame_index] * num_boxes))

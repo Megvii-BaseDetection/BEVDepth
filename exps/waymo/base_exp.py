@@ -308,7 +308,14 @@ class BEVDepthLightningModel(LightningModule):
         gt_infos = list()
         for test_step_output in test_step_outputs:
             for i in range(len(test_step_output)):
-                prediction_infos.append(test_step_output[i][:3])
+                pred_bboxes = test_step_output[i][0]
+                pred_scores = test_step_output[i][1]
+                pred_classes = [
+                    self.class_names[pred_id]
+                    for pred_id in test_step_output[i][2]
+                ]
+                prediction_infos.append(
+                    [pred_bboxes, pred_scores, pred_classes])
                 gt_infos.append(test_step_output[i][3:])
         synchronize()
         # TODO: Change another way.

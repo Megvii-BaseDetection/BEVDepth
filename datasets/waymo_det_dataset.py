@@ -87,13 +87,17 @@ class WaymoDetDataset(BaseDetDataset):
             timestamps = list()
             lidar_depth = list()
             key_info = cam_infos_sweeps[0]
-            resize, resize_dims, crop, flip, \
-                rotate_ida = self.sample_ida_augmentation(
-                    )
             for sweep_idx, cam_info in enumerate(cam_infos_sweeps):
 
                 img = Image.open(
                     os.path.join(self.data_root, cam_info[cam]['filename']))
+                if sweep_idx == 0:
+                    H = img.size[1]
+                    W = img.size[0]
+                    resize, resize_dims, crop, flip, \
+                        rotate_ida = self.sample_ida_augmentation(
+                            H, W
+                        )
                 # sweep sensor to sweep ego
                 sweepsensor2sweepego = np.linalg.inv(
                     T_front_cam_to_ref @ np.linalg.inv(
@@ -193,7 +197,7 @@ class WaymoDetDataset(BaseDetDataset):
             # cameras are unable to see.
             if (gt_class3d not in self.classes) or (
                     self.is_train and gt_box3d[0] < 0
-                    and np.abs(gt_box3d[1]) / gt_box3d[0] < np.sqrt(3)):
+                    and np.abs(gt_box3d[1]) / -gt_box3d[0] < np.sqrt(3)):
                 continue
             gt_boxes.append(gt_box3d)
             gt_labels.append(self.classes.index(gt_class3d))
