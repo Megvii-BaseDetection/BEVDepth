@@ -21,9 +21,9 @@ LIDAR_KEYS = ['TOP', 'FRONT', 'SIDE_LEFT', 'SIDE_RIGHT', 'REAR']
 H = 1280
 W = 1920
 final_dim = (256, 704)
-img_conf = dict(img_mean=[103.530, 116.280, 123.675],
-                img_std=[1.0, 1.0, 1.0],
-                to_rgb=False)
+img_conf = dict(img_mean=[123.675, 116.28, 103.53],
+                img_std=[58.395, 57.12, 57.375],
+                to_rgb=True)
 
 backbone_conf = {
     'x_bound': [-64, 64, 0.32],
@@ -295,7 +295,7 @@ class BEVDepthLightningModel(LightningModule):
         else:
             results = self.model.get_bboxes(preds, img_metas)
         for i in range(len(results)):
-            results[i][0] = results[i][0].tensor.detach().cpu().numpy()
+            results[i][0] = results[i][0].detach().cpu().numpy()
             results[i][1] = results[i][1].detach().cpu().numpy()
             results[i][2] = results[i][2].detach().cpu().numpy()
             results[i].append(img_metas[i])
