@@ -26,8 +26,8 @@ img_conf = dict(img_mean=[123.675, 116.28, 103.53],
                 to_rgb=True)
 
 backbone_conf = {
-    'x_bound': [-64, 64, 0.32],
-    'y_bound': [-64, 64, 0.32],
+    'x_bound': [-64, 64, 1.],
+    'y_bound': [-64, 64, 1.],
     'z_bound': [-2, 4, 6],
     'd_bound': [2.0, 66, 0.5],
     'final_dim':
@@ -105,17 +105,17 @@ bbox_coder = dict(
     post_center_range=[-70, -70, -10.0, 70, 70, 10.0],
     max_num=500,
     score_threshold=0.01,
-    out_size_factor=1,
-    voxel_size=[0.32, 0.32, 6.0],
+    out_size_factor=4,
+    voxel_size=[0.25, 0.25, 6.0],
     pc_range=[-64, -64, -2, 64, 64, 4.0],
     code_size=7,
 )
 
 train_cfg = dict(
     point_cloud_range=[-64, -64, -2, 64, 64, 4.0],
-    grid_size=[400, 400, 1],
-    voxel_size=[0.32, 0.32, 6.0],
-    out_size_factor=1,
+    grid_size=[512, 512, 1],
+    voxel_size=[0.25, 0.25, 6.0],
+    out_size_factor=4,
     dense_reg=1,
     gaussian_overlap=0.1,
     max_objs=500,
@@ -129,8 +129,8 @@ test_cfg = dict(
     max_pool_nms=False,
     min_radius=[1, 0.1],
     score_threshold=0.01,
-    out_size_factor=1,
-    voxel_size=[0.32, 0.32, 6],
+    out_size_factor=4,
+    voxel_size=[0.25, 0.25, 6],
     nms_type='circle',
     pre_max_size=1000,
     post_max_size=83,
@@ -188,7 +188,6 @@ class BEVDepthLightningModel(LightningModule):
         self.model = BaseBEVDepth(self.backbone_conf,
                                   self.head_conf,
                                   is_train_depth=True)
-        self.mode = 'valid'
         self.img_conf = img_conf
         self.data_use_cbgs = False
         self.num_sweeps = 1

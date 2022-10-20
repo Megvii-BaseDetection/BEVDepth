@@ -216,7 +216,6 @@ class BEVDepthLightningModel(LightningModule):
         self.model = BaseBEVDepth(self.backbone_conf,
                                   self.head_conf,
                                   is_train_depth=True)
-        self.mode = 'valid'
         self.img_conf = img_conf
         self.data_use_cbgs = False
         self.num_sweeps = 1

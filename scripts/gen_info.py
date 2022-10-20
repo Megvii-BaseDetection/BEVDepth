@@ -16,7 +16,7 @@ from waymo_open_dataset.utils import (frame_utils, range_image_utils,
 WAYMO_CLASSES = ['unknown', 'Vehicle', 'Pedestrian', 'Sign', 'Cyclist']
 LIDAR_NAMES = ['UNKNOWN', 'TOP', 'FRONT', 'SIDE_LEFT', 'SIDE_RIGHT', 'REAR']
 CAMERA_NAMES = [
-    'UNKNOWN', 'FRONT', 'FRONT_LEFT', 'SIDE_LEFT', 'FRONT_RIGHT', 'SIDE_RIGHT'
+    'UNKNOWN', 'FRONT', 'FRONT_LEFT', 'FRONT_RIGHT', 'SIDE_LEFT', 'SIDE_RIGHT'
 ]
 
 
