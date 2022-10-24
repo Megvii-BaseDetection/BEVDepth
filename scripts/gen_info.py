@@ -129,7 +129,7 @@ def generate_info(nusc, scenes, max_cam_sweeps=6, max_lidar_sweeps=10):
             info['cam_sweeps'] = cam_sweeps
             info['lidar_sweeps'] = lidar_sweeps
             ann_infos = list()
-            if hasattr(cur_sample, 'anns'):
+            if 'anns' in cur_sample:
                 for ann in cur_sample['anns']:
                     ann_info = nusc.get('sample_annotation', ann)
                     velocity = nusc.box_velocity(ann_info['token'])
