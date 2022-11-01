@@ -295,6 +295,7 @@ def parse_waymo_samples(example_proto, idx, directory, tfrecord):
     frame = dataset_pb2.Frame()
     frame.ParseFromString(example_proto)
     gt_classes3d, difficultys, gt_boxes3d = [], [], []
+    gt_most_visible_camera_names = list()
     # TODO: should also consider speeds and accelerations
     tracking_difficultys, obj_ids = [], []
     num_points_in_gt = []
@@ -314,6 +315,8 @@ def parse_waymo_samples(example_proto, idx, directory, tfrecord):
         tracking_difficultys.append(laser_label.tracking_difficulty_level)
         obj_ids.append(laser_label.id)
         num_points_in_gt.append(laser_label.num_lidar_points_in_box)
+        gt_most_visible_camera_names.append(
+            laser_label.most_visible_camera_name)
 
     info = dict()
     lidar_infos = dict()
@@ -325,7 +328,7 @@ def parse_waymo_samples(example_proto, idx, directory, tfrecord):
     info['obj_ids'] = obj_ids
     info['tracking_difficultys'] = np.array(tracking_difficultys)
     info['num_points_in_gt'] = np.array(num_points_in_gt)
-
+    info['gt_most_visible_camera_names'] = gt_most_visible_camera_names
     info = drop_info_with_name(info, name='unknown')
     if len(info['gt_classes3d']) == 0:
         gt_boxes3d = np.zeros((0, 7), dtype=np.float32)

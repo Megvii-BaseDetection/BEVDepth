@@ -190,15 +190,15 @@ class WaymoDetDataset(BaseDetDataset):
         gt_classes3d = list()
         num_points_in_gt = list()
         difficultys = list()
-        for i, (gt_box3d, gt_class3d) in enumerate(
-                zip(info['gt_boxes3d'], info['gt_classes3d'])):
+        for i, (gt_box3d, gt_class3d,
+                gt_most_visible_camera_name) in enumerate(
+                    zip(info['gt_boxes3d'], info['gt_classes3d'],
+                        info['gt_most_visible_camera_names'])):
             # Use ego coordinate.
             # Temporary solution for masking gt_boxes that
             # cameras are unable to see.
-            if (gt_class3d not in self.classes) or (
-                    gt_box3d[0] < 0 and np.abs(gt_box3d[1]) / -gt_box3d[0] <
-                    np.sqrt(3)) or gt_box3d[0] < -64 or gt_box3d[
-                        1] < -64 or gt_box3d[0] > 64 or gt_box3d[1] > 64:
+            if (gt_class3d
+                    not in self.classes) or gt_most_visible_camera_name == '':
                 continue
             gt_boxes.append(gt_box3d)
             gt_labels.append(self.classes.index(gt_class3d))
