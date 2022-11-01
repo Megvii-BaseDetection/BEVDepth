@@ -102,7 +102,7 @@ def save_range_image(frame,
 
     """
 
-    range_images, _, range_image_top_pose = \
+    range_images, _, _, range_image_top_pose = \
         frame_utils.parse_range_image_and_camera_projection(frame)
     calibrations = sorted(frame.context.laser_calibrations,
                           key=lambda c: c.name)

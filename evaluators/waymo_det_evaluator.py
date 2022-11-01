@@ -236,32 +236,6 @@ class DetWaymoEvaluator(tf.test.TestCase):
         'Sign': 3,
         'Cyclist': 4,
     }
-    WAYMO_CLASSES = ['unknown', 'Vehicle', 'Pedestrian', 'Sign', 'Cyclist']
-    # Map between class name and waymo results keys.
-    NAME_LEVEL1_AP_MAP = {
-        'Vehicle': 'OBJECT_TYPE_TYPE_VEHICLE_LEVEL_1/AP',
-        'Pedestrian': 'OBJECT_TYPE_TYPE_PEDESTRIAN_LEVEL_1/AP',
-        'Sign': 'OBJECT_TYPE_TYPE_SIGN_LEVEL_1/AP',
-        'Cyclist': 'OBJECT_TYPE_TYPE_CYCLIST_LEVEL_1/AP'
-    }
-    NAME_LEVEL2_AP_MAP = {
-        'Vehicle': 'OBJECT_TYPE_TYPE_VEHICLE_LEVEL_2/AP',
-        'Pedestrian': 'OBJECT_TYPE_TYPE_PEDESTRIAN_LEVEL_2/AP',
-        'Sign': 'OBJECT_TYPE_TYPE_SIGN_LEVEL_2/AP',
-        'Cyclist': 'OBJECT_TYPE_TYPE_CYCLIST_LEVEL_2/AP'
-    }
-    NAME_LEVEL1_APH_MAP = {
-        'Vehicle': 'OBJECT_TYPE_TYPE_VEHICLE_LEVEL_1/APH',
-        'Pedestrian': 'OBJECT_TYPE_TYPE_PEDESTRIAN_LEVEL_1/APH',
-        'Sign': 'OBJECT_TYPE_TYPE_SIGN_LEVEL_1/APH',
-        'Cyclist': 'OBJECT_TYPE_TYPE_CYCLIST_LEVEL_1/APH'
-    }
-    NAME_LEVEL2_APH_MAP = {
-        'Vehicle': 'OBJECT_TYPE_TYPE_VEHICLE_LEVEL_2/APH',
-        'Pedestrian': 'OBJECT_TYPE_TYPE_PEDESTRIAN_LEVEL_2/APH',
-        'Sign': 'OBJECT_TYPE_TYPE_SIGN_LEVEL_2/APH',
-        'Cyclist': 'OBJECT_TYPE_TYPE_CYCLIST_LEVEL_2/APH'
-    }
 
     def __init__(self,
                  class_names,
@@ -338,163 +312,14 @@ class DetWaymoEvaluator(tf.test.TestCase):
         with open(dump_path, 'wb') as f:
             f.write(pred_objects.SerializeToString())
 
-    def compute_let_detection_metrics(self,
-                                      prediction_frame_id,
-                                      prediction_bbox,
-                                      prediction_type,
-                                      prediction_score,
-                                      ground_truth_frame_id,
-                                      ground_truth_bbox,
-                                      ground_truth_type,
-                                      ground_truth_difficulty,
-                                      recall_at_precision=None,
-                                      name_filter=None,
-                                      config=build_let_metrics_config()):
-        """Returns dict of metric name to metric values`.
-
-        Notation:
-            * M: number of predicted boxes.
-            * D: number of box dimensions. The number of
-                box dimensions can be one of
-                the following:
-                4: Used for boxes with type TYPE_AA_2D
-                    (center_x, center_y, length,
-                    width)
-                5: Used for boxes with type TYPE_2D
-                    (center_x, center_y, length,
-                    width, heading).
-                7: Used for boxes with type TYPE_3D
-                    (center_x, center_y, center_z, length,
-                    width, height, heading).
-            * N: number of ground truth boxes.
-
-        Args:
-            prediction_frame_id: [M] int64 tensor that
-                identifies frame for each
-            prediction.
-            prediction_bbox: [M, D] tensor encoding
-                the predicted bounding boxes.
-            prediction_type: [M] tensor encoding the
-                object type of each prediction.
-            prediction_score: [M] tensor encoding the
-                score of each prediciton.
-            ground_truth_frame_id: [N] int64 tensor that
-                identifies frame for each
-            ground truth.
-            ground_truth_bbox: [N, D] tensor encoding the ground
-                truth bounding boxes.
-            ground_truth_type: [N] tensor encoding the object type
-                of each ground truth.
-            ground_truth_difficulty: [N] tensor encoding the
-                difficulty level of each
-            ground truth.
-            config: The metrics config defined in protos/metrics.proto.
-
-        Returns:
-            A dictionary of metric names to metrics values.
-        """
-        num_ground_truths = tf.shape(ground_truth_bbox)[0]
-        ground_truth_speed = tf.zeros((num_ground_truths, 2), tf.float32)
-
-        config_str = config.SerializeToString()
-        ap, aph, apl, pr, _, _, _ = py_metrics_ops.detection_metrics(
-            prediction_frame_id=tf.cast(prediction_frame_id, tf.int64),
-            prediction_bbox=tf.cast(prediction_bbox, tf.float32),
-            prediction_type=tf.cast(prediction_type, tf.uint8),
-            prediction_score=tf.cast(prediction_score, tf.float32),
-            prediction_overlap_nlz=tf.cast(prediction_score, tf.bool),
-            ground_truth_frame_id=tf.cast(ground_truth_frame_id, tf.int64),
-            ground_truth_bbox=tf.cast(ground_truth_bbox, tf.float32),
-            ground_truth_type=tf.cast(ground_truth_type, tf.uint8),
-            ground_truth_difficulty=tf.cast(ground_truth_difficulty, tf.uint8),
-            ground_truth_speed=ground_truth_speed,
-            config=config_str)
-        breakdown_names = config_util.get_breakdown_names_from_config(config)
-        metric_values = {}
-        for i, name in enumerate(breakdown_names):
-            if name_filter is not None and name_filter not in name:
-                continue
-            metric_values['{}/LET-mAP'.format(name)] = ap[i]
-            metric_values['{}/LET-mAPH'.format(name)] = aph[i]
-            metric_values['{}/LET-mAPL'.format(name)] = apl[i]
-        return metric_values
-
-    def parse_metrics_objects_binary_files(self, ground_truths_path,
-                                           predictions_path):
-        with tf.io.gfile.GFile(ground_truths_path, 'rb') as f:
-            ground_truth_objects = metrics_pb2.Objects.FromString(f.read())
-        with tf.io.gfile.GFile(predictions_path, 'rb') as f:
-            predictions_objects = metrics_pb2.Objects.FromString(f.read())
-        eval_dict = {
-            'prediction_frame_id': [],
-            'prediction_bbox': [],
-            'prediction_type': [],
-            'prediction_score': [],
-            'ground_truth_frame_id': [],
-            'ground_truth_bbox': [],
-            'ground_truth_type': [],
-            'ground_truth_difficulty': [],
-        }
-
-        # Parse and filter ground truths.
-        for obj in ground_truth_objects.objects:
-            # Ignore objects that are not in Cameras' FOV.
-            if not obj.object.most_visible_camera_name:
-                continue
-            # Ignore objects that are fully-occluded to cameras.
-            if obj.object.num_lidar_points_in_box == 0:
-                continue
-            # Fill in unknown difficulties.
-            if obj.object.detection_difficulty_level == \
-                    label_pb2.Label.UNKNOWN:
-                obj.object.detection_difficulty_level = label_pb2.Label.LEVEL_2
-                eval_dict['ground_truth_frame_id'].append(
-                    obj.frame_timestamp_micros)
-                # Note that we use `camera_synced_box` for evaluation.
-                ground_truth_box = obj.object.camera_synced_box
-                eval_dict['ground_truth_bbox'].append(
-                    np.asarray([
-                        ground_truth_box.center_x,
-                        ground_truth_box.center_y,
-                        ground_truth_box.center_z,
-                        ground_truth_box.length,
-                        ground_truth_box.width,
-                        ground_truth_box.height,
-                        ground_truth_box.heading,
-                    ], np.float32))
-                eval_dict['ground_truth_type'].append(obj.object.type)
-                eval_dict['ground_truth_difficulty'].append(
-                    np.uint8(obj.object.detection_difficulty_level))
-
-        # Parse predictions.
-        for obj in predictions_objects.objects:
-            eval_dict['prediction_frame_id'].append(obj.frame_timestamp_micros)
-            prediction_box = obj.object.box
-            eval_dict['prediction_bbox'].append(
-                np.asarray([
-                    prediction_box.center_x,
-                    prediction_box.center_y,
-                    prediction_box.center_z,
-                    prediction_box.length,
-                    prediction_box.width,
-                    prediction_box.height,
-                    prediction_box.heading,
-                ], np.float32))
-            eval_dict['prediction_type'].append(obj.object.type)
-            eval_dict['prediction_score'].append(obj.score)
-
-        for key, value in eval_dict.items():
-            eval_dict[key] = tf.stack(value)
-        return eval_dict
-
     def evaluate(self, prediction_infos, gt_infos):
         self.format(prediction_infos, gt_infos)
 
         GROUND_TRUTHS_BIN = './cam_gt.bin'
         PREDICTIONS_BIN = os.path.join(self.dump_path, 'predictions.bin')
-        eval_dict = self.parse_metrics_objects_binary_files(
-            GROUND_TRUTHS_BIN, PREDICTIONS_BIN)
-        metrics_dict = self.compute_let_detection_metrics(**eval_dict)
+        eval_dict = parse_metrics_objects_binary_files(GROUND_TRUTHS_BIN,
+                                                       PREDICTIONS_BIN)
+        metrics_dict = compute_let_detection_metrics(**eval_dict)
         for key, value in metrics_dict.items():
             if 'SIGN' in key:
                 continue
