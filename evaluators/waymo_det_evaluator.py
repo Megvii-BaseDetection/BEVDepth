@@ -1,10 +1,184 @@
+import copy
+import os
+
 import numpy as np
-import prettytable as pt
 import tensorflow as tf
 import torch
-from google.protobuf import text_format
-from waymo_open_dataset.metrics.python import detection_metrics
-from waymo_open_dataset.protos import metrics_pb2
+from waymo_open_dataset import label_pb2
+from waymo_open_dataset.metrics.ops import py_metrics_ops
+from waymo_open_dataset.metrics.python import config_util_py as config_util
+from waymo_open_dataset.protos import breakdown_pb2, metrics_pb2
+
+
+def build_let_metrics_config():
+    let_metric_config = metrics_pb2.Config.LongitudinalErrorTolerantConfig(
+        enabled=True,
+        sensor_location=metrics_pb2.Config.LongitudinalErrorTolerantConfig.
+        Location3D(x=1.43, y=0, z=2.18),
+        longitudinal_tolerance_percentage=0.1,  # 10% tolerance.
+        min_longitudinal_tolerance_meter=0.5,
+    )
+    config = metrics_pb2.Config(
+        box_type=label_pb2.Label.Box.TYPE_3D,
+        matcher_type=metrics_pb2.MatcherProto.TYPE_HUNGARIAN,
+        iou_thresholds=[0.0, 0.3, 0.5, 0.5, 0.5],
+        score_cutoffs=[i * 0.01 for i in range(100)] + [1.0],
+        let_metric_config=let_metric_config)
+
+    config.breakdown_generator_ids.append(breakdown_pb2.Breakdown.OBJECT_TYPE)
+    config.difficulties.append(
+        metrics_pb2.Difficulty(levels=[label_pb2.Label.LEVEL_2]))
+    config.breakdown_generator_ids.append(breakdown_pb2.Breakdown.CAMERA)
+    config.difficulties.append(
+        metrics_pb2.Difficulty(levels=[label_pb2.Label.LEVEL_2]))
+    config.breakdown_generator_ids.append(breakdown_pb2.Breakdown.RANGE)
+    config.difficulties.append(
+        metrics_pb2.Difficulty(levels=[label_pb2.Label.LEVEL_2]))
+    return config
+
+
+def compute_let_detection_metrics(prediction_frame_id,
+                                  prediction_bbox,
+                                  prediction_type,
+                                  prediction_score,
+                                  ground_truth_frame_id,
+                                  ground_truth_bbox,
+                                  ground_truth_type,
+                                  ground_truth_difficulty,
+                                  recall_at_precision=None,
+                                  name_filter=None,
+                                  config=build_let_metrics_config()):
+    """Returns dict of metric name to metric values`.
+
+  Notation:
+    * M: number of predicted boxes.
+    * D: number of box dimensions. The number of box dimensions can be one of
+         the following:
+           4: Used for boxes with type TYPE_AA_2D (center_x, center_y, length,
+              width)
+           5: Used for boxes with type TYPE_2D (center_x, center_y, length,
+              width, heading).
+           7: Used for boxes with type TYPE_3D (center_x, center_y, center_z,
+              length, width, height, heading).
+    * N: number of ground truth boxes.
+
+  Args:
+    prediction_frame_id: [M] int64 tensor that identifies frame for each
+      prediction.
+    prediction_bbox: [M, D] tensor encoding the
+        predicted bounding boxes.
+    prediction_type: [M] tensor encoding the object type
+        of each prediction.
+    prediction_score: [M] tensor encoding the score of each
+        prediciton.
+    ground_truth_frame_id: [N] int64 tensor that identifies
+        frame for each
+      ground truth.
+    ground_truth_bbox: [N, D] tensor encoding the ground
+        truth bounding boxes.
+    ground_truth_type: [N] tensor encoding the object type
+        of each ground truth.
+    ground_truth_difficulty: [N] tensor encoding the difficulty
+        level of each
+      ground truth.
+    config: The metrics config defined in protos/metrics.proto.
+
+  Returns:
+    A dictionary of metric names to metrics values.
+  """
+    num_ground_truths = tf.shape(ground_truth_bbox)[0]
+    num_predictions = tf.shape(prediction_bbox)[0]
+    ground_truth_speed = tf.zeros((num_ground_truths, 2), tf.float32)
+    prediction_overlap_nlz = tf.zeros((num_predictions), tf.bool)
+
+    config_str = config.SerializeToString()
+    ap, aph, apl, pr, _, _, _ = py_metrics_ops.detection_metrics(
+        prediction_frame_id=tf.cast(prediction_frame_id, tf.int64),
+        prediction_bbox=tf.cast(prediction_bbox, tf.float32),
+        prediction_type=tf.cast(prediction_type, tf.uint8),
+        prediction_score=tf.cast(prediction_score, tf.float32),
+        prediction_overlap_nlz=prediction_overlap_nlz,
+        ground_truth_frame_id=tf.cast(ground_truth_frame_id, tf.int64),
+        ground_truth_bbox=tf.cast(ground_truth_bbox, tf.float32),
+        ground_truth_type=tf.cast(ground_truth_type, tf.uint8),
+        ground_truth_difficulty=tf.cast(ground_truth_difficulty, tf.uint8),
+        ground_truth_speed=ground_truth_speed,
+        config=config_str)
+    breakdown_names = config_util.get_breakdown_names_from_config(config)
+    metric_values = {}
+    for i, name in enumerate(breakdown_names):
+        if name_filter is not None and name_filter not in name:
+            continue
+        metric_values['{}/LET-mAP'.format(name)] = ap[i]
+        metric_values['{}/LET-mAPH'.format(name)] = aph[i]
+        metric_values['{}/LET-mAPL'.format(name)] = apl[i]
+    return metric_values
+
+
+def parse_metrics_objects_binary_files(ground_truths_path, predictions_path):
+    with tf.io.gfile.GFile(ground_truths_path, 'rb') as f:
+        ground_truth_objects = metrics_pb2.Objects.FromString(f.read())
+    with tf.io.gfile.GFile(predictions_path, 'rb') as f:
+        predictions_objects = metrics_pb2.Objects.FromString(f.read())
+    eval_dict = {
+        'prediction_frame_id': [],
+        'prediction_bbox': [],
+        'prediction_type': [],
+        'prediction_score': [],
+        'ground_truth_frame_id': [],
+        'ground_truth_bbox': [],
+        'ground_truth_type': [],
+        'ground_truth_difficulty': [],
+    }
+
+    # Parse and filter ground truths.
+    for obj in ground_truth_objects.objects:
+        # Ignore objects that are not in Cameras' FOV.
+        if not obj.object.most_visible_camera_name:
+            continue
+        # Ignore objects that are fully-occluded to cameras.
+        if obj.object.num_lidar_points_in_box == 0:
+            continue
+        # Fill in unknown difficulties.
+        if obj.object.detection_difficulty_level == label_pb2.Label.UNKNOWN:
+            obj.object.detection_difficulty_level = label_pb2.Label.LEVEL_2
+        eval_dict['ground_truth_frame_id'].append(obj.frame_timestamp_micros)
+        # Note that we use `camera_synced_box` for evaluation.
+        ground_truth_box = obj.object.camera_synced_box
+        eval_dict['ground_truth_bbox'].append(
+            np.asarray([
+                ground_truth_box.center_x,
+                ground_truth_box.center_y,
+                ground_truth_box.center_z,
+                ground_truth_box.length,
+                ground_truth_box.width,
+                ground_truth_box.height,
+                ground_truth_box.heading,
+            ], np.float32))
+        eval_dict['ground_truth_type'].append(obj.object.type)
+        eval_dict['ground_truth_difficulty'].append(
+            np.uint8(obj.object.detection_difficulty_level))
+
+    # Parse predictions.
+    for obj in predictions_objects.objects:
+        eval_dict['prediction_frame_id'].append(obj.frame_timestamp_micros)
+        prediction_box = obj.object.box
+        eval_dict['prediction_bbox'].append(
+            np.asarray([
+                prediction_box.center_x,
+                prediction_box.center_y,
+                prediction_box.center_z,
+                prediction_box.length,
+                prediction_box.width,
+                prediction_box.height,
+                prediction_box.heading,
+            ], np.float32))
+        eval_dict['prediction_type'].append(obj.object.type)
+        eval_dict['prediction_score'].append(obj.score)
+
+    for key, value in eval_dict.items():
+        eval_dict[key] = tf.stack(value)
+    return eval_dict
 
 
 def convert_numpy_to_torch(x):
@@ -56,6 +230,12 @@ class DetWaymoEvaluator(tf.test.TestCase):
             Defaults to (0.3, 0.5, 0.8).
         eval_types (str): Bbox type to be evaluated. Defaults to 'bev'.
     """
+    CLASS_NAME_TO_ID = {
+        'Vehicle': 1,
+        'Pedestrian': 2,
+        'Sign': 3,
+        'Cyclist': 4,
+    }
     WAYMO_CLASSES = ['unknown', 'Vehicle', 'Pedestrian', 'Sign', 'Cyclist']
     # Map between class name and waymo results keys.
     NAME_LEVEL1_AP_MAP = {
@@ -83,252 +263,239 @@ class DetWaymoEvaluator(tf.test.TestCase):
         'Cyclist': 'OBJECT_TYPE_TYPE_CYCLIST_LEVEL_2/APH'
     }
 
-    def __init__(self, class_names, distance_thresh=100, reserved_digits=4):
+    def __init__(self,
+                 class_names,
+                 distance_thresh=100,
+                 reserved_digits=4,
+                 dump_path='./',
+                 dump_gt=True):
         super().__init__()
         assert len(class_names) > 0, 'must contain at least one class'
         self.class_names = class_names
         self.distance_thresh = distance_thresh
         self.reserved_digits = reserved_digits
+        self.dump_path = dump_path
+        self.dump_gt = dump_gt
 
-    def generate_waymo_type_results(self, infos, class_names, is_gt=False):
+    def format(self, results, gt_for_eval, dump_path=None):
+        assert len(results) == len(gt_for_eval)
+        results_for_dump = list()
+        for cur_result, cur_gt in zip(results, gt_for_eval):
+            # parse predicted results
+            labels_class = list()
+            bbox3d_filtered = list()
+            score_filtered = list()
+            for i in range(len(cur_result[0])):
+                cur_class_name = cur_result[2][i]
+                bbox3d = cur_result[0][i]
+                score = cur_result[1][i]
+                bbox3d_filtered.append(bbox3d)
+                score_filtered.append(score)
+                labels_class.append(cur_class_name)
+            cur_result_dict = dict()
+            cur_result_dict['labels3d'] = labels_class
+            cur_result_dict['bboxes3d'] = torch.from_numpy(
+                np.stack(bbox3d_filtered)) if len(
+                    bbox3d_filtered) else torch.zeros(
+                        (0, 7), dtype=torch.float32)
+            cur_result_dict['scores3d'] = torch.Tensor(score_filtered) if len(
+                bbox3d_filtered) else torch.Tensor([])
+            results_for_dump.append(cur_result_dict)
+        self.dump_results(copy.deepcopy(results_for_dump),
+                          copy.deepcopy(gt_for_eval),
+                          os.path.join(self.dump_path, './predictions.bin'))
 
-        frame_id, boxes3d, obj_type, score, overlap_nlz, difficulty \
-            = [], [], [], [], [], []
-        for frame_index, info in enumerate(infos):
-            if is_gt:
-                img_metas, gt_boxes3d, gt_classes3d = info
-                box_mask = np.array([n in class_names for n in gt_classes3d],
-                                    dtype=np.bool_)
-                if 'num_points_in_gt' in img_metas:
+    def dump_results(self, results, gt_for_eval, dump_path):
+        # Generate pred.
+        pred_objects = metrics_pb2.Objects()
+        for i, pred in enumerate(results):
+            bboxes3d = pred['bboxes3d']
+            scores3d = pred['scores3d']
+            labels3d = pred['labels3d']
+            gt = gt_for_eval[i][0]
 
-                    zero_difficulty_mask = img_metas['difficultys'] == 0
-                    img_metas['difficultys'][
-                        (img_metas['num_points_in_gt'] > 5)
-                        & zero_difficulty_mask] = 1
-                    img_metas['difficultys'][
-                        (img_metas['num_points_in_gt'] <= 5)
-                        & zero_difficulty_mask] = 2
-                    nonzero_mask = img_metas['num_points_in_gt'] > 0
-                    box_mask = box_mask & nonzero_mask
-                else:
-                    print('Please provide the num_points_in_gt for evaluating '
-                          'on Waymo Dataset '
-                          '(If you create Waymo Infos before 20201126, please '
-                          're-create the validation infos '
-                          'with version 1.2 Waymo dataset to get this '
-                          'attribute). SSS of OpenPCDet')
-                    raise NotImplementedError
+            for j, bbox3d in enumerate(bboxes3d):
+                score = scores3d[j]
+                label = labels3d[j]
+                pred_object = metrics_pb2.Object()
+                pred_object.context_name = gt['scene_name']
+                pred_object.frame_timestamp_micros = int(gt['timestamp'])
+                # Populating box and score.
+                box = label_pb2.Label.Box()
+                box.center_x = bbox3d[0]
+                box.center_y = bbox3d[1]
+                box.center_z = bbox3d[2]
+                box.length = bbox3d[3]
+                box.width = bbox3d[4]
+                box.height = bbox3d[5]
+                box.heading = bbox3d[-1]
+                pred_object.object.box.CopyFrom(box)
+                pred_object.score = score
+                # Use correct type.
+                pred_object.object.type = self.CLASS_NAME_TO_ID[label]
+                pred_objects.objects.append(pred_object)
 
-                num_boxes = box_mask.sum()
-                gt_classes3d = np.array(gt_classes3d)[box_mask]
-                box_name = np.array([
-                    self.WAYMO_CLASSES.index(gt_class3d)
-                    for gt_class3d in gt_classes3d
-                ])[box_mask]
-                difficulty.append(img_metas['difficultys'][box_mask])
-                score.append(np.ones(num_boxes))
+        with open(dump_path, 'wb') as f:
+            f.write(pred_objects.SerializeToString())
 
-                boxes3d.append(gt_boxes3d[box_mask])
-            else:
-                # bboxes3d
-                num_boxes = len(info[0])
-                difficulty.append([0] * num_boxes)
-                # scores3d
-                score.append(info[1])
-                boxes3d.append(info[0])
-                box_name = np.array([
-                    self.WAYMO_CLASSES.index(class_id) for class_id in info[2]
-                ])
+    def compute_let_detection_metrics(self,
+                                      prediction_frame_id,
+                                      prediction_bbox,
+                                      prediction_type,
+                                      prediction_score,
+                                      ground_truth_frame_id,
+                                      ground_truth_bbox,
+                                      ground_truth_type,
+                                      ground_truth_difficulty,
+                                      recall_at_precision=None,
+                                      name_filter=None,
+                                      config=build_let_metrics_config()):
+        """Returns dict of metric name to metric values`.
 
-            obj_type.append(box_name)
-            frame_id.append(np.array([frame_index] * num_boxes))
-            overlap_nlz.append(np.zeros(num_boxes))  # set zero currently
+        Notation:
+            * M: number of predicted boxes.
+            * D: number of box dimensions. The number of
+                box dimensions can be one of
+                the following:
+                4: Used for boxes with type TYPE_AA_2D
+                    (center_x, center_y, length,
+                    width)
+                5: Used for boxes with type TYPE_2D
+                    (center_x, center_y, length,
+                    width, heading).
+                7: Used for boxes with type TYPE_3D
+                    (center_x, center_y, center_z, length,
+                    width, height, heading).
+            * N: number of ground truth boxes.
 
-        frame_id = np.concatenate(frame_id).reshape(-1).astype(np.int64)
-        boxes3d = np.concatenate(boxes3d, axis=0)
-        obj_type = np.concatenate(obj_type).reshape(-1)
-        score = np.concatenate(score).reshape(-1)
-        overlap_nlz = np.concatenate(overlap_nlz).reshape(-1)
-        difficulty = np.concatenate(difficulty).reshape(-1).astype(np.int8)
+        Args:
+            prediction_frame_id: [M] int64 tensor that
+                identifies frame for each
+            prediction.
+            prediction_bbox: [M, D] tensor encoding
+                the predicted bounding boxes.
+            prediction_type: [M] tensor encoding the
+                object type of each prediction.
+            prediction_score: [M] tensor encoding the
+                score of each prediciton.
+            ground_truth_frame_id: [N] int64 tensor that
+                identifies frame for each
+            ground truth.
+            ground_truth_bbox: [N, D] tensor encoding the ground
+                truth bounding boxes.
+            ground_truth_type: [N] tensor encoding the object type
+                of each ground truth.
+            ground_truth_difficulty: [N] tensor encoding the
+                difficulty level of each
+            ground truth.
+            config: The metrics config defined in protos/metrics.proto.
 
-        boxes3d[:, -1] = limit_period(boxes3d[:, -1],
-                                      offset=0.5,
-                                      period=np.pi * 2)
-
-        return frame_id, boxes3d, obj_type, score, overlap_nlz, difficulty
-
-    def build_config(self):
-        config = metrics_pb2.Config()
-        config_text = """
-        breakdown_generator_ids: OBJECT_TYPE
-        difficulties {
-        levels:1
-        levels:2
-        }
-        matcher_type: TYPE_HUNGARIAN
-        iou_thresholds: 0.0
-        iou_thresholds: 0.7
-        iou_thresholds: 0.5
-        iou_thresholds: 0.5
-        iou_thresholds: 0.5
-        box_type: TYPE_3D
+        Returns:
+            A dictionary of metric names to metrics values.
         """
+        num_ground_truths = tf.shape(ground_truth_bbox)[0]
+        ground_truth_speed = tf.zeros((num_ground_truths, 2), tf.float32)
 
-        for x in range(0, 100):
-            config.score_cutoffs.append(x * 0.01)
-        config.score_cutoffs.append(1.0)
+        config_str = config.SerializeToString()
+        ap, aph, apl, pr, _, _, _ = py_metrics_ops.detection_metrics(
+            prediction_frame_id=tf.cast(prediction_frame_id, tf.int64),
+            prediction_bbox=tf.cast(prediction_bbox, tf.float32),
+            prediction_type=tf.cast(prediction_type, tf.uint8),
+            prediction_score=tf.cast(prediction_score, tf.float32),
+            prediction_overlap_nlz=tf.cast(prediction_score, tf.bool),
+            ground_truth_frame_id=tf.cast(ground_truth_frame_id, tf.int64),
+            ground_truth_bbox=tf.cast(ground_truth_bbox, tf.float32),
+            ground_truth_type=tf.cast(ground_truth_type, tf.uint8),
+            ground_truth_difficulty=tf.cast(ground_truth_difficulty, tf.uint8),
+            ground_truth_speed=ground_truth_speed,
+            config=config_str)
+        breakdown_names = config_util.get_breakdown_names_from_config(config)
+        metric_values = {}
+        for i, name in enumerate(breakdown_names):
+            if name_filter is not None and name_filter not in name:
+                continue
+            metric_values['{}/LET-mAP'.format(name)] = ap[i]
+            metric_values['{}/LET-mAPH'.format(name)] = aph[i]
+            metric_values['{}/LET-mAPL'.format(name)] = apl[i]
+        return metric_values
 
-        text_format.Merge(config_text, config)
-        return config
+    def parse_metrics_objects_binary_files(self, ground_truths_path,
+                                           predictions_path):
+        with tf.io.gfile.GFile(ground_truths_path, 'rb') as f:
+            ground_truth_objects = metrics_pb2.Objects.FromString(f.read())
+        with tf.io.gfile.GFile(predictions_path, 'rb') as f:
+            predictions_objects = metrics_pb2.Objects.FromString(f.read())
+        eval_dict = {
+            'prediction_frame_id': [],
+            'prediction_bbox': [],
+            'prediction_type': [],
+            'prediction_score': [],
+            'ground_truth_frame_id': [],
+            'ground_truth_bbox': [],
+            'ground_truth_type': [],
+            'ground_truth_difficulty': [],
+        }
 
-    def build_graph(self, graph):
-        with graph.as_default():
-            self._pd_frame_id = tf.compat.v1.placeholder(dtype=tf.int64)
-            self._pd_bbox = tf.compat.v1.placeholder(dtype=tf.float32)
-            self._pd_type = tf.compat.v1.placeholder(dtype=tf.uint8)
-            self._pd_score = tf.compat.v1.placeholder(dtype=tf.float32)
-            self._pd_overlap_nlz = tf.compat.v1.placeholder(dtype=tf.bool)
+        # Parse and filter ground truths.
+        for obj in ground_truth_objects.objects:
+            # Ignore objects that are not in Cameras' FOV.
+            if not obj.object.most_visible_camera_name:
+                continue
+            # Ignore objects that are fully-occluded to cameras.
+            if obj.object.num_lidar_points_in_box == 0:
+                continue
+            # Fill in unknown difficulties.
+            if obj.object.detection_difficulty_level == \
+                    label_pb2.Label.UNKNOWN:
+                obj.object.detection_difficulty_level = label_pb2.Label.LEVEL_2
+                eval_dict['ground_truth_frame_id'].append(
+                    obj.frame_timestamp_micros)
+                # Note that we use `camera_synced_box` for evaluation.
+                ground_truth_box = obj.object.camera_synced_box
+                eval_dict['ground_truth_bbox'].append(
+                    np.asarray([
+                        ground_truth_box.center_x,
+                        ground_truth_box.center_y,
+                        ground_truth_box.center_z,
+                        ground_truth_box.length,
+                        ground_truth_box.width,
+                        ground_truth_box.height,
+                        ground_truth_box.heading,
+                    ], np.float32))
+                eval_dict['ground_truth_type'].append(obj.object.type)
+                eval_dict['ground_truth_difficulty'].append(
+                    np.uint8(obj.object.detection_difficulty_level))
 
-            self._gt_frame_id = tf.compat.v1.placeholder(dtype=tf.int64)
-            self._gt_bbox = tf.compat.v1.placeholder(dtype=tf.float32)
-            self._gt_type = tf.compat.v1.placeholder(dtype=tf.uint8)
-            self._gt_difficulty = tf.compat.v1.placeholder(dtype=tf.uint8)
-            metrics = detection_metrics.get_detection_metric_ops(
-                config=self.build_config(),
-                prediction_frame_id=self._pd_frame_id,
-                prediction_bbox=self._pd_bbox,
-                prediction_type=self._pd_type,
-                prediction_score=self._pd_score,
-                prediction_overlap_nlz=self._pd_overlap_nlz,
-                ground_truth_bbox=self._gt_bbox,
-                ground_truth_type=self._gt_type,
-                ground_truth_frame_id=self._gt_frame_id,
-                ground_truth_difficulty=self._gt_difficulty,
-            )
-            return metrics
+        # Parse predictions.
+        for obj in predictions_objects.objects:
+            eval_dict['prediction_frame_id'].append(obj.frame_timestamp_micros)
+            prediction_box = obj.object.box
+            eval_dict['prediction_bbox'].append(
+                np.asarray([
+                    prediction_box.center_x,
+                    prediction_box.center_y,
+                    prediction_box.center_z,
+                    prediction_box.length,
+                    prediction_box.width,
+                    prediction_box.height,
+                    prediction_box.heading,
+                ], np.float32))
+            eval_dict['prediction_type'].append(obj.object.type)
+            eval_dict['prediction_score'].append(obj.score)
 
-    def run_eval_ops(
-        self,
-        sess,
-        graph,
-        metrics,
-        prediction_frame_id,
-        prediction_bbox,
-        prediction_type,
-        prediction_score,
-        prediction_overlap_nlz,
-        ground_truth_frame_id,
-        ground_truth_bbox,
-        ground_truth_type,
-        ground_truth_difficulty,
-    ):
-        sess.run(
-            [tf.group([value[1] for value in metrics.values()])],
-            feed_dict={
-                self._pd_bbox: prediction_bbox,
-                self._pd_frame_id: prediction_frame_id,
-                self._pd_type: prediction_type,
-                self._pd_score: prediction_score,
-                self._pd_overlap_nlz: prediction_overlap_nlz,
-                self._gt_bbox: ground_truth_bbox,
-                self._gt_type: ground_truth_type,
-                self._gt_frame_id: ground_truth_frame_id,
-                self._gt_difficulty: ground_truth_difficulty,
-            },
-        )
-
-    def eval_value_ops(self, sess, graph, metrics):
-        return {item[0]: sess.run([item[1][0]]) for item in metrics.items()}
-
-    def mask_by_distance(self, distance_thresh, boxes_3d, *args):
-        mask = np.linalg.norm(boxes_3d[:, 0:2], axis=1) < distance_thresh + 0.5
-        boxes_3d = boxes_3d[mask]
-        ret_ans = [boxes_3d]
-        for arg in args:
-            ret_ans.append(arg[mask])
-
-        return tuple(ret_ans)
+        for key, value in eval_dict.items():
+            eval_dict[key] = tf.stack(value)
+        return eval_dict
 
     def evaluate(self, prediction_infos, gt_infos):
-        print('Start the waymo evaluation...')
-        assert len(prediction_infos) == len(
-            gt_infos), f'{len(prediction_infos)} vs {len(gt_infos)}'
-        tf.compat.v1.disable_eager_execution()
-        pd_frameid, pd_boxes3d, pd_type, pd_score, pd_overlap_nlz, _ \
-            = self.generate_waymo_type_results(
-                prediction_infos, self.class_names, is_gt=False)
-        gt_frameid, gt_boxes3d, gt_type, gt_score, gt_overlap_nlz,\
-            gt_difficulty = self.generate_waymo_type_results(
-                gt_infos, self.class_names, is_gt=True)
+        self.format(prediction_infos, gt_infos)
 
-        pd_boxes3d, pd_frameid, pd_type, pd_score, pd_overlap_nlz \
-            = self.mask_by_distance(
-                self.distance_thresh, pd_boxes3d, pd_frameid, pd_type,
-                pd_score, pd_overlap_nlz)
-        gt_boxes3d, gt_frameid, gt_type, gt_score, gt_difficulty \
-            = self.mask_by_distance(
-                self.distance_thresh, gt_boxes3d, gt_frameid, gt_type,
-                gt_score, gt_difficulty)
-        print(f'Number: (pd, {len(pd_boxes3d)}) VS. (gt, {len(gt_boxes3d)})')
-        print(f'Level 1: {(gt_difficulty == 1).sum()}, \
-                Level2: {(gt_difficulty == 2).sum()})')
-        if pd_score.max() > 1:
-            # assert pd_score.max() <= 1.0, 'Waymo evaluation
-            # only supports normalized scores'
-            pd_score = 1 / (1 + np.exp(-pd_score))
-            print('Warning: Waymo evaluation only supports normalized scores')
-        graph = tf.Graph()
-        metrics = self.build_graph(graph)
-        with self.test_session(graph=graph) as sess:
-            sess.run(tf.compat.v1.initializers.local_variables())
-            self.run_eval_ops(
-                sess,
-                graph,
-                metrics,
-                pd_frameid,
-                pd_boxes3d,
-                pd_type,
-                pd_score,
-                pd_overlap_nlz,
-                gt_frameid,
-                gt_boxes3d,
-                gt_type,
-                gt_difficulty,
-            )
-            with tf.compat.v1.variable_scope('detection_metrics', reuse=True):
-                aps = self.eval_value_ops(sess, graph, metrics)
-        level1_ap_results = [
-            round(aps[self.NAME_LEVEL1_AP_MAP[class_name]][0],
-                  self.reserved_digits) for class_name in self.class_names
-        ]
-        level2_ap_results = [
-            round(aps[self.NAME_LEVEL2_AP_MAP[class_name]][0],
-                  self.reserved_digits) for class_name in self.class_names
-        ]
-        level1_aph_results = [
-            round(aps[self.NAME_LEVEL1_APH_MAP[class_name]][0],
-                  self.reserved_digits) for class_name in self.class_names
-        ]
-        level2_aph_results = [
-            round(aps[self.NAME_LEVEL2_APH_MAP[class_name]][0],
-                  self.reserved_digits) for class_name in self.class_names
-        ]
-        level1_ap_results.append(
-            np.mean(level1_ap_results).round(self.reserved_digits))
-        level1_ap_results.insert(0, 'level1_ap')
-        level2_ap_results.append(
-            np.mean(level2_ap_results).round(self.reserved_digits))
-        level2_ap_results.insert(0, 'level2_ap')
-        level1_aph_results.append(
-            np.mean(level1_aph_results).round(self.reserved_digits))
-        level1_aph_results.insert(0, 'level1_aph')
-        level2_aph_results.append(
-            np.mean(level2_aph_results).round(self.reserved_digits))
-        level2_aph_results.insert(0, 'level2_aph')
-        tb = pt.PrettyTable()
-        tb.field_names = ['metrics'] + self.class_names + ['mean']
-        tb.add_row(level1_ap_results)
-        tb.add_row(level1_aph_results)
-        tb.add_row(level2_ap_results)
-        tb.add_row(level2_aph_results)
-        return '\n' + tb.get_string()
+        GROUND_TRUTHS_BIN = './cam_gt.bin'
+        PREDICTIONS_BIN = os.path.join(self.dump_path, 'predictions.bin')
+        eval_dict = self.parse_metrics_objects_binary_files(
+            GROUND_TRUTHS_BIN, PREDICTIONS_BIN)
+        metrics_dict = self.compute_let_detection_metrics(**eval_dict)
+        for key, value in metrics_dict.items():
+            if 'SIGN' in key:
+                continue
+            print(f'{key:<55}: {value}')

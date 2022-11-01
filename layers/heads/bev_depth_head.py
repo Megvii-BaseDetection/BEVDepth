@@ -337,7 +337,7 @@ class BEVDepthHead(CenterHead):
         for task_id, preds_dict in enumerate(preds_dicts):
             num_class_with_bg = self.num_classes[task_id]
             batch_size = preds_dict[0]['heatmap'].shape[0]
-            batch_heatmap = preds_dict[0]['heatmap']
+            batch_heatmap = preds_dict[0]['heatmap'].sigmoid()
 
             batch_reg = preds_dict[0]['reg']
             batch_hei = preds_dict[0]['height']

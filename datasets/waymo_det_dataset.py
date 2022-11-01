@@ -196,8 +196,9 @@ class WaymoDetDataset(BaseDetDataset):
             # Temporary solution for masking gt_boxes that
             # cameras are unable to see.
             if (gt_class3d not in self.classes) or (
-                    self.is_train and gt_box3d[0] < 0
-                    and np.abs(gt_box3d[1]) / -gt_box3d[0] < np.sqrt(3)):
+                    gt_box3d[0] < 0 and np.abs(gt_box3d[1]) / -gt_box3d[0] <
+                    np.sqrt(3)) or gt_box3d[0] < -64 or gt_box3d[
+                        1] < -64 or gt_box3d[0] > 64 or gt_box3d[1] > 64:
                 continue
             gt_boxes.append(gt_box3d)
             gt_labels.append(self.classes.index(gt_class3d))
@@ -206,6 +207,8 @@ class WaymoDetDataset(BaseDetDataset):
             difficultys.append(info['difficultys'][i])
         img_metas['num_points_in_gt'] = np.array(num_points_in_gt)
         img_metas['difficultys'] = np.array(difficultys)
+        img_metas['timestamp'] = info['timestamp']
+        img_metas['scene_name'] = info['scene_name']
         if len(gt_boxes) == 0:
             return torch.zeros((0, 7)), torch.zeros((0)), gt_classes3d
         return torch.Tensor(gt_boxes), torch.tensor(gt_labels), gt_classes3d
