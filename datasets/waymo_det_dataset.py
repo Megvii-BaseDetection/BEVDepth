@@ -209,6 +209,9 @@ class WaymoDetDataset(BaseDetDataset):
         img_metas['difficultys'] = np.array(difficultys)
         img_metas['timestamp'] = info['timestamp']
         img_metas['scene_name'] = info['scene_name']
+        img_metas['gt_most_visible_camera_names'] = info[
+            'gt_most_visible_camera_names']
+        img_metas['obj_ids'] = info['obj_ids']
         if len(gt_boxes) == 0:
             return torch.zeros((0, 7)), torch.zeros((0)), gt_classes3d
         return torch.Tensor(gt_boxes), torch.tensor(gt_labels), gt_classes3d

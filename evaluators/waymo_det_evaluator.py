@@ -241,15 +241,13 @@ class DetWaymoEvaluator(tf.test.TestCase):
                  class_names,
                  distance_thresh=100,
                  reserved_digits=4,
-                 dump_path='./',
-                 dump_gt=True):
+                 dump_path='./'):
         super().__init__()
         assert len(class_names) > 0, 'must contain at least one class'
         self.class_names = class_names
         self.distance_thresh = distance_thresh
         self.reserved_digits = reserved_digits
         self.dump_path = dump_path
-        self.dump_gt = dump_gt
 
     def format(self, results, gt_for_eval, dump_path=None):
         assert len(results) == len(gt_for_eval)
@@ -315,7 +313,7 @@ class DetWaymoEvaluator(tf.test.TestCase):
     def evaluate(self, prediction_infos, gt_infos):
         self.format(prediction_infos, gt_infos)
 
-        GROUND_TRUTHS_BIN = './cam_gt.bin'
+        GROUND_TRUTHS_BIN = './data/waymo/v1.4/cam_gt.bin'
         PREDICTIONS_BIN = os.path.join(self.dump_path, 'predictions.bin')
         eval_dict = parse_metrics_objects_binary_files(GROUND_TRUTHS_BIN,
                                                        PREDICTIONS_BIN)

@@ -10,6 +10,7 @@ from nuscenes.nuscenes import NuScenes
 from nuscenes.utils import splits
 from tqdm import tqdm
 from waymo_open_dataset import dataset_pb2
+from waymo_open_dataset.protos import metrics_pb2
 from waymo_open_dataset.utils import (frame_utils, range_image_utils,
                                       transform_utils)
 
@@ -78,6 +79,71 @@ def save_image(frame, cur_save_path, file_name, cam_names, cam_infos):
         # intrinsic parameters
         cam_infos[cam_names[camera.name]]['intrinsic'] = np.array(
             camera.intrinsic)
+
+
+def save_label(frame, objects, version='multi-view', cam_sync=True):
+    """Modified from https://github.com/Tai-Wang/Depth-from-Motion/blob/
+        main/tools/create_waymo_gt_bin.py.
+        Parse and save gt bin file for camera-only 3D detection on Waymo.
+    Args:
+        frame (:obj:`Frame`): Open dataset frame proto.
+        objects (:obj:`Object`): Ground truths in waymo dataset Object proto.
+        version (str): Version of gt bin file. Choices include 'multi-view'
+            and 'front-view'. Defaults to 'multi-view'.
+        cam_sync (bool): Whether to generate camera synced gt bin. Defaults to
+            True.
+    """
+    id_to_bbox = dict()
+    id_to_name = dict()
+    for labels in frame.projected_lidar_labels:
+        name = labels.name  # 0 unknown, 1-5 corresponds to 5 cameras
+        for label in labels.labels:
+            # TODO: need a workaround as bbox may not belong to front cam
+            bbox = [
+                label.box.center_x - label.box.length / 2,
+                label.box.center_y - label.box.width / 2,
+                label.box.center_x + label.box.length / 2,
+                label.box.center_y + label.box.width / 2
+            ]
+            # object id in one frame
+            id_to_bbox[label.id] = bbox
+            id_to_name[label.id] = name - 1
+    if version == 'multi-view':
+        cam_list = [
+            '_FRONT', '_FRONT_LEFT', '_FRONT_RIGHT', '_SIDE_LEFT',
+            '_SIDE_RIGHT'
+        ]
+    elif version == 'front-view':
+        cam_list = ['_FRONT']
+    else:
+        raise NotImplementedError
+    for obj in frame.laser_labels:
+        bounding_box = None
+        name = None
+        id = obj.id
+        for cam in cam_list:
+            if id + cam in id_to_bbox:
+                bounding_box = id_to_bbox.get(id + cam)
+                name = str(id_to_name.get(id + cam))
+                break
+        num_pts = obj.num_lidar_points_in_box
+
+        if cam_sync:
+            if obj.most_visible_camera_name:
+                box3d = obj.camera_synced_box
+            else:
+                continue
+        else:
+            box3d = obj.box
+
+        if bounding_box is not None and obj.type > 0 and num_pts >= 1:
+            o = metrics_pb2.Object()
+            o.context_name = frame.context.name
+            o.frame_timestamp_micros = frame.timestamp_micros
+            o.score = 0.5
+            o.object.CopyFrom(obj)
+            o.object.box.CopyFrom(box3d)
+            objects.objects.append(o)
 
 
 def save_range_image(frame,
@@ -585,6 +651,24 @@ def main():
             waymo_infos_valdiation,
             os.path.join('./data', 'waymo', args.dataset_version,
                          'waymo_infos_validation.pkl'))
+        objects = metrics_pb2.Objects()
+        progress_bar = mmcv.ProgressBar(len(validation_tfrecords))
+        for i in range(len(validation_tfrecords)):
+            pathname = os.path.join('./data', 'waymo', args.dataset_version,
+                                    'validation', validation_tfrecords[i])
+            dataset = tf.data.TFRecordDataset(pathname, compression_type='')
+            for frame_idx, data in enumerate(dataset):
+                frame = dataset_pb2.Frame()
+                frame.ParseFromString(bytearray(data.numpy()))
+                save_label(frame, objects)
+            progress_bar.update()
+
+        # Write objects to a file.
+        f = open(
+            os.path.join('./data', 'waymo', args.dataset_version,
+                         'cam_gt.bin'), 'wb')
+        f.write(objects.SerializeToString())
+        f.close()
 
 
 if __name__ == '__main__':
