@@ -237,16 +237,10 @@ class DetWaymoEvaluator(tf.test.TestCase):
         'Cyclist': 4,
     }
 
-    def __init__(self,
-                 class_names,
-                 distance_thresh=100,
-                 reserved_digits=4,
-                 dump_path='./'):
+    def __init__(self, class_names, dump_path='./'):
         super().__init__()
         assert len(class_names) > 0, 'must contain at least one class'
         self.class_names = class_names
-        self.distance_thresh = distance_thresh
-        self.reserved_digits = reserved_digits
         self.dump_path = dump_path
 
     def format(self, results, gt_for_eval, dump_path=None):
