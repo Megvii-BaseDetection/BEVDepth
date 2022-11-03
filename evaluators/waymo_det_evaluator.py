@@ -1,3 +1,6 @@
+"""Modified from https://github.com/waymo-research/waymo-open-dataset/
+blob/master/tutorial/tutorial_camera_only.ipynb
+"""
 import copy
 import os
 
