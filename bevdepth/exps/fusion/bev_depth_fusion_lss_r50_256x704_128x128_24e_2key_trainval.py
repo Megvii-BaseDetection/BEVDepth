@@ -1,7 +1,7 @@
 # Copyright (c) Megvii Inc. All rights reserved.
-from exps.base_cli import run_cli
-from exps.fusion.bev_depth_fusion_lss_r50_256x704_128x128_24e_2key import \
-    BEVDepthLightningModel as BaseBEVDepthLightningModel
+from bevdepth.exps.base_cli import run_cli
+from bevdepth.exps.fusion.bev_depth_fusion_lss_r50_256x704_128x128_24e_2key import \
+    BEVDepthLightningModel as BaseBEVDepthLightningModel  # noqa
 
 
 class BEVDepthLightningModel(BaseBEVDepthLightningModel):

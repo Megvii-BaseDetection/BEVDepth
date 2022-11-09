@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import torch
 
-from dataset.nusc_mv_det_dataset import NuscMVDetDataset
+from bevdepth.datasets.nusc_det_dataset import NuscDetDataset
 
 CLASSES = [
     'car',
@@ -55,13 +55,13 @@ class TestNuscMVDetData(unittest.TestCase):
     def test_voxel_pooling(self):
         np.random.seed(0)
         torch.random.manual_seed(0)
-        nusc = NuscMVDetDataset(ida_aug_conf,
-                                bda_aug_conf,
-                                CLASSES,
-                                './test/data/nuscenes',
-                                './test/data/nuscenes/infos.pkl',
-                                True,
-                                sweep_idxes=[4])
+        nusc = NuscDetDataset(ida_aug_conf,
+                              bda_aug_conf,
+                              CLASSES,
+                              './test/data/nuscenes',
+                              './test/data/nuscenes/infos.pkl',
+                              True,
+                              sweep_idxes=[4])
         ret_list = nusc[0]
         assert torch.isclose(ret_list[0].mean(),
                              torch.tensor(-0.4667),

@@ -7,7 +7,7 @@ from mmdet.models import build_backbone
 from mmdet.models.backbones.resnet import BasicBlock
 from torch import nn
 
-from ops.voxel_pooling import voxel_pooling
+from bevdepth.ops.voxel_pooling import voxel_pooling
 
 __all__ = ['BaseLSSFPN']
 

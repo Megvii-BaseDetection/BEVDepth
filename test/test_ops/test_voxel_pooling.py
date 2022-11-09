@@ -3,7 +3,7 @@ import unittest
 import pytest
 import torch
 
-from ops.voxel_pooling import voxel_pooling
+from bevdepth.ops.voxel_pooling import voxel_pooling
 
 
 class TestLSSFPN(unittest.TestCase):
