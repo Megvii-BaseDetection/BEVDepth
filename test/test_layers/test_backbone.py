@@ -3,7 +3,7 @@ import unittest
 import pytest
 import torch
 
-from layers.backbones.base_lss_fpn import BaseLSSFPN
+from bevdepth.layers.backbones.base_lss_fpn import BaseLSSFPN
 
 
 class TestLSSFPN(unittest.TestCase):

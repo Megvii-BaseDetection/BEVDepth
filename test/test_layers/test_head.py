@@ -4,7 +4,7 @@ import pytest
 import torch
 from mmdet3d.core.bbox.structures.lidar_box3d import LiDARInstance3DBoxes
 
-from layers.heads.bev_depth_head import BEVDepthHead
+from bevdepth.layers.heads.bev_depth_head import BEVDepthHead
 
 
 class TestLSSFPN(unittest.TestCase):

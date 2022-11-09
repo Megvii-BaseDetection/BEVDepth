@@ -1,11 +1,11 @@
 """Inherited from `https://github.com/open-mmlab/mmdetection3d/blob/master/mmdet3d/models/dense_heads/centerpoint_head.py`"""  # noqa
 import torch
 from mmdet3d.core import draw_heatmap_gaussian, gaussian_radius
+from mmdet3d.models import build_neck
 from mmdet3d.models.dense_heads.centerpoint_head import CenterHead
 from mmdet3d.models.utils import clip_sigmoid
 from mmdet.core import reduce_mean
 from mmdet.models import build_backbone
-from mmdet3d.models import build_neck
 from torch.cuda.amp import autocast
 
 __all__ = ['BEVDepthHead']

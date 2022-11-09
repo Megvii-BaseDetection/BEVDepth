@@ -1,5 +1,5 @@
-from layers.backbones.fusion_lss_fpn import FusionLSSFPN
-from layers.heads.bev_depth_head import BEVDepthHead
+from bevdepth.layers.backbones.fusion_lss_fpn import FusionLSSFPN
+from bevdepth.layers.heads.bev_depth_head import BEVDepthHead
 
 from .base_bev_depth import BaseBEVDepth
 

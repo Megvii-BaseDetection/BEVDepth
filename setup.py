@@ -60,7 +60,7 @@ setup(
     ext_modules=[
         make_cuda_ext(
             name='voxel_pooling_ext',
-            module='ops.voxel_pooling',
+            module='bevdepth.ops.voxel_pooling',
             sources=['src/voxel_pooling_forward.cpp'],
             sources_cuda=['src/voxel_pooling_forward_cuda.cu'],
         ),

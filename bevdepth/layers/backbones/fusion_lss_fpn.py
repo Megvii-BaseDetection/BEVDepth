@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from mmdet.models.backbones.resnet import BasicBlock
 
-from ops.voxel_pooling import voxel_pooling
+from bevdepth.ops.voxel_pooling import voxel_pooling
 
 from .base_lss_fpn import ASPP, BaseLSSFPN, Mlp, SELayer
 

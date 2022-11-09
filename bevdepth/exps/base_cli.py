@@ -4,8 +4,8 @@ from argparse import ArgumentParser
 
 import pytorch_lightning as pl
 
-from callbacks.ema import EMACallback
-from utils.torch_dist import all_gather_object, synchronize
+from bevdepth.callbacks.ema import EMACallback
+from bevdepth.utils.torch_dist import all_gather_object, synchronize
 
 from .base_exp import BEVDepthLightningModel
 

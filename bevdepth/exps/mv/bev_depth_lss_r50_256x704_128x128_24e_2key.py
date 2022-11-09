@@ -22,9 +22,10 @@ bicycle 0.305   0.554   0.264   0.653   0.263   0.006
 traffic_cone    0.462   0.516   0.355   nan     nan     nan
 barrier 0.512   0.491   0.275   0.200   nan     nan
 """
-from exps.base_cli import run_cli
-from exps.base_exp import BEVDepthLightningModel as BaseBEVDepthLightningModel
-from models.base_bev_depth import BaseBEVDepth
+from bevdepth.exps.base_cli import run_cli
+from bevdepth.exps.base_exp import \
+    BEVDepthLightningModel as BaseBEVDepthLightningModel
+from bevdepth.models.base_bev_depth import BaseBEVDepth
 
 
 class BEVDepthLightningModel(BaseBEVDepthLightningModel):
