@@ -55,7 +55,7 @@ class BEVDepthLightningModel(BaseBEVDepthLightningModel):
         else:
             results = self.model.get_bboxes(preds, img_metas)
         for i in range(len(results)):
-            results[i][0] = results[i][0].tensor.detach().cpu().numpy()
+            results[i][0] = results[i][0].detach().cpu().numpy()
             results[i][1] = results[i][1].detach().cpu().numpy()
             results[i][2] = results[i][2].detach().cpu().numpy()
             results[i].append(img_metas[i])
