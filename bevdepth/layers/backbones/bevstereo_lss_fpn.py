@@ -207,8 +207,8 @@ class BEVStereoLSSFPN(nn.Module):
                  em_iteration=3,
                  min_sigma=1,
                  num_groups=8,
-                 num_ranges=1,
-                 range_list=None,
+                 num_ranges=4,
+                 range_list=[[2, 8], [8, 16], [16, 28], [28, 58]],
                  k_list=None,
                  use_mask=True):
         """Modified from `https://github.com/nv-tlabs/lift-splat-shoot`.
