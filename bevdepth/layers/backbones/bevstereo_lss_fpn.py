@@ -176,7 +176,6 @@ class DepthNet(nn.Module):
         depth_feat = self.depth_feat_conv(depth_feat)
         mono_depth = self.mono_depth_net(depth_feat)
         mu_sigma_score = self.mu_sigma_range_net(depth_feat)
-        # pdb.set_trace()
         d_coords = torch.arange(*self.d_bound,
                                 dtype=torch.float).reshape(1, -1, 1, 1).cuda()
         d_coords = d_coords.repeat(B, 1, H, W)
@@ -381,7 +380,6 @@ class BEVStereoLSSFPN(nn.Module):
         """
         batch_size, num_channels, height, width = stereo_feats_all_sweeps[
             0].shape
-        # thres = int(self.mvs_weighting.split("CW")[1])
         num_sweeps = len(stereo_feats_all_sweeps)
         depth_score_all_sweeps = list()
         for idx in range(num_sweeps):
@@ -640,7 +638,6 @@ class BEVStereoLSSFPN(nn.Module):
                              self.d_bound[2]), ..., ] = (
                                  depth_score_single_range *
                                  range_score[:, range_idx:range_idx + 1, ...])
-            # del range_score
             del depth_score_single_range
             del mu_repeated
         if self.use_mask:
