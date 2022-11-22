@@ -416,7 +416,9 @@ class BEVDepthHead(CenterHead):
                                           batch_vel,
                                           reg=batch_reg,
                                           task_id=task_id)
-            assert self.test_cfg['nms_type'] in ['circle', 'rotate']
+            assert self.test_cfg['nms_type'] in [
+                'size_aware_circle', 'circle', 'rotate'
+            ]
             batch_reg_preds = [box['bboxes'] for box in temp]
             batch_cls_preds = [box['scores'] for box in temp]
             batch_cls_labels = [box['labels'] for box in temp]
