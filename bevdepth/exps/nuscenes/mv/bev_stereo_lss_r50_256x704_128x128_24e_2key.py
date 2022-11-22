@@ -40,6 +40,10 @@ class BEVDepthLightningModel(BaseBEVDepthLightningModel):
         self.head_conf['train_cfg']['code_weight'] = [
             1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
         ]
+        self.head_conf['test_cfg']['thresh_scale'] = [
+            0.6, 0.4, 0.4, 0.7, 0.8, 0.9
+        ]
+        self.head_conf['test_cfg']['nms_type'] = 'size_aware_circle'
         self.model = BEVStereo(self.backbone_conf,
                                self.head_conf,
                                is_train_depth=True)
