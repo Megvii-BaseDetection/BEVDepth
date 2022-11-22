@@ -26,9 +26,9 @@ import torch.nn as nn
 from torch.cuda.amp.autocast_mode import autocast
 from torch.optim.lr_scheduler import MultiStepLR
 
-from bevdepth.exps.base_cli import run_cli
-from bevdepth.exps.mv.bev_depth_lss_r50_256x704_128x128_24e_2key import \
-    BEVDepthLightningModel as BaseBEVDepthLightningModel
+from bevdepth.exps.nuscenes.base_cli import run_cli
+from bevdepth.exps.nuscenes.mv.bev_depth_lss_r50_256x704_128x128_24e_2key import \
+    BEVDepthLightningModel as BaseBEVDepthLightningModel  # noqa
 from bevdepth.layers.backbones.base_lss_fpn import BaseLSSFPN as BaseLSSFPN
 from bevdepth.layers.heads.bev_depth_head import BEVDepthHead
 from bevdepth.models.base_bev_depth import BaseBEVDepth as BaseBEVDepth
