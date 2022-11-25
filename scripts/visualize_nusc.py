@@ -1,6 +1,7 @@
 import os
 from argparse import ArgumentParser
 
+import cv2
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import mmcv
@@ -8,8 +9,7 @@ import numpy as np
 from nuscenes.utils.data_classes import Box, LidarPointCloud
 from pyquaternion import Quaternion
 
-from datasets.nusc_det_dataset import map_name_from_general_to_detection
-
+from bevdepth.datasets.nusc_det_dataset import map_name_from_general_to_detection
 
 def parse_args():
     parser = ArgumentParser(add_help=False)
@@ -213,6 +213,8 @@ def demo(
 
         img = mmcv.imread(
             os.path.join('data/nuScenes', info['cam_infos'][k]['filename']))
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
         # Draw images
         plt.imshow(img)
 
