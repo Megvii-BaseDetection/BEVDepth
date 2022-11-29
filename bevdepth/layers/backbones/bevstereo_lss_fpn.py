@@ -588,9 +588,6 @@ class BEVStereoLSSFPN(nn.Module):
                 mu = (depth_sample * mu_score).sum(1, keepdim=True)
                 del depth_sample
                 del depth_sample_frustum
-            mu = torch.clamp(mu,
-                             max=self.range_list[range_idx][1],
-                             min=self.range_list[range_idx][0])
             range_length = int(
                 (self.range_list[range_idx][1] - self.range_list[range_idx][0])
                 // self.d_bound[2])
