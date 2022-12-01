@@ -8,6 +8,7 @@ estimation. For more details, please refer to our [paper on Arxiv](https://arxiv
 BEVStereo is a new multi-view 3D object detector using temporal stereo to enhance depth estimation.
 <img src="assets/bevstereo.png" width="1000" >
 ## Updates!!
+* 【2022/11/30】 We updated our paper(BEVDepth) on [Arxiv](https://arxiv.org/abs/2206.10092).
 * 【2022/09/22】 We released our paper(BEVStereo) on [Arxiv](https://arxiv.org/abs/2209.10248).
 * 【2022/08/24】 We submitted our result(BEVStereo) on [nuScenes Detection Task](https://nuscenes.org/object-detection?externalData=all&mapData=all&modalities=Camera) and achieved the SOTA.
 * 【2022/06/23】 We submitted our result(BEVDepth) without extra data on [nuScenes Detection Task](https://nuscenes.org/object-detection?externalData=all&mapData=all&modalities=Camera) and achieved the SOTA.
