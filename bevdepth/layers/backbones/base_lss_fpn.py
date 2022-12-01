@@ -6,6 +6,7 @@ from mmdet3d.models import build_neck
 from mmdet.models import build_backbone
 from mmdet.models.backbones.resnet import BasicBlock
 from torch import nn
+from torch.cuda.amp.autocast_mode import autocast
 
 from bevdepth.ops.voxel_pooling import voxel_pooling
 
@@ -245,10 +246,75 @@ class DepthNet(nn.Module):
         return torch.cat([depth, context], dim=1)
 
 
+class DepthAggregation(nn.Module):
+    """
+    pixel cloud feature extraction
+    """
+    def __init__(self, in_channels, mid_channels, out_channels):
+        super(DepthAggregation, self).__init__()
+
+        self.reduce_conv = nn.Sequential(
+            nn.Conv2d(in_channels,
+                      mid_channels,
+                      kernel_size=3,
+                      stride=1,
+                      padding=1,
+                      bias=False),
+            nn.BatchNorm2d(mid_channels),
+            nn.ReLU(inplace=True),
+        )
+
+        self.conv = nn.Sequential(
+            nn.Conv2d(mid_channels,
+                      mid_channels,
+                      kernel_size=3,
+                      stride=1,
+                      padding=1,
+                      bias=False),
+            nn.BatchNorm2d(mid_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(mid_channels,
+                      mid_channels,
+                      kernel_size=3,
+                      stride=1,
+                      padding=1,
+                      bias=False),
+            nn.BatchNorm2d(mid_channels),
+            nn.ReLU(inplace=True),
+        )
+
+        self.out_conv = nn.Sequential(
+            nn.Conv2d(mid_channels,
+                      out_channels,
+                      kernel_size=3,
+                      stride=1,
+                      padding=1,
+                      bias=True),
+            # nn.BatchNorm3d(out_channels),
+            # nn.ReLU(inplace=True),
+        )
+
+    @autocast(False)
+    def forward(self, x):
+        x = self.reduce_conv(x)
+        x = self.conv(x) + x
+        x = self.out_conv(x)
+        return x
+
+
 class BaseLSSFPN(nn.Module):
-    def __init__(self, x_bound, y_bound, z_bound, d_bound, final_dim,
-                 downsample_factor, output_channels, img_backbone_conf,
-                 img_neck_conf, depth_net_conf):
+    def __init__(self,
+                 x_bound,
+                 y_bound,
+                 z_bound,
+                 d_bound,
+                 final_dim,
+                 downsample_factor,
+                 output_channels,
+                 img_backbone_conf,
+                 img_neck_conf,
+                 depth_net_conf,
+                 use_da=False):
         """Modified from `https://github.com/nv-tlabs/lift-splat-shoot`.
 
         Args:
@@ -293,6 +359,10 @@ class BaseLSSFPN(nn.Module):
 
         self.img_neck.init_weights()
         self.img_backbone.init_weights()
+        self.use_da = use_da
+        if self.use_da:
+            self.depth_aggregation_net = self._configure_depth_aggregation_net(
+            )
 
     def _configure_depth_net(self, depth_net_conf):
         return DepthNet(
@@ -301,6 +371,24 @@ class BaseLSSFPN(nn.Module):
             self.output_channels,
             self.depth_channels,
         )
+
+    def _configure_depth_aggregation_net(self):
+        """build pixel cloud feature extractor"""
+        return DepthAggregation(self.output_channels, self.output_channels,
+                                self.output_channels)
+
+    def _forward_voxel_net(self, img_feat_with_depth):
+        if self.use_da:
+            # BEVConv2D [n, c, d, h, w] -> [n, h, c, w, d]
+            img_feat_with_depth = img_feat_with_depth.permute(
+                0, 3, 1, 4,
+                2).contiguous()  # [n, c, d, h, w] -> [n, h, c, w, d]
+            n, h, c, w, d = img_feat_with_depth.shape
+            img_feat_with_depth = img_feat_with_depth.view(-1, c, w, d)
+            img_feat_with_depth = (
+                self.depth_aggregation_net(img_feat_with_depth).view(
+                    n, h, c, w, d).permute(0, 2, 4, 1, 3).contiguous().float())
+        return img_feat_with_depth
 
     def create_frustum(self):
         """Generate frustum"""
@@ -373,9 +461,6 @@ class BaseLSSFPN(nn.Module):
 
     def _forward_depth_net(self, feat, mats_dict):
         return self.depth_net(feat, mats_dict)
-
-    def _forward_voxel_net(self, img_feat_with_depth):
-        return img_feat_with_depth
 
     def _forward_single_sweep(self,
                               sweep_index,

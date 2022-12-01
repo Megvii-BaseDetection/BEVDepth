@@ -22,111 +22,22 @@ traffic_cone    0.536   0.438   0.339   nan     nan     nan
 barrier 0.559   0.392   0.289   0.124   nan     nan
 """
 import torch
-import torch.nn as nn
-from torch.cuda.amp.autocast_mode import autocast
 from torch.optim.lr_scheduler import MultiStepLR
 
 from bevdepth.exps.nuscenes.base_cli import run_cli
 from bevdepth.exps.nuscenes.mv.bev_depth_lss_r50_256x704_128x128_24e_2key import \
     BEVDepthLightningModel as BaseBEVDepthLightningModel  # noqa
-from bevdepth.layers.backbones.base_lss_fpn import BaseLSSFPN as BaseLSSFPN
-from bevdepth.layers.heads.bev_depth_head import BEVDepthHead
 from bevdepth.models.base_bev_depth import BaseBEVDepth as BaseBEVDepth
-
-
-class DepthAggregation(nn.Module):
-    """
-    pixel cloud feature extraction
-    """
-    def __init__(self, in_channels, mid_channels, out_channels):
-        super(DepthAggregation, self).__init__()
-
-        self.reduce_conv = nn.Sequential(
-            nn.Conv2d(in_channels,
-                      mid_channels,
-                      kernel_size=3,
-                      stride=1,
-                      padding=1,
-                      bias=False),
-            nn.BatchNorm2d(mid_channels),
-            nn.ReLU(inplace=True),
-        )
-
-        self.conv = nn.Sequential(
-            nn.Conv2d(mid_channels,
-                      mid_channels,
-                      kernel_size=3,
-                      stride=1,
-                      padding=1,
-                      bias=False),
-            nn.BatchNorm2d(mid_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(mid_channels,
-                      mid_channels,
-                      kernel_size=3,
-                      stride=1,
-                      padding=1,
-                      bias=False),
-            nn.BatchNorm2d(mid_channels),
-            nn.ReLU(inplace=True),
-        )
-
-        self.out_conv = nn.Sequential(
-            nn.Conv2d(mid_channels,
-                      out_channels,
-                      kernel_size=3,
-                      stride=1,
-                      padding=1,
-                      bias=True),
-            # nn.BatchNorm3d(out_channels),
-            # nn.ReLU(inplace=True),
-        )
-
-    @autocast(False)
-    def forward(self, x):
-        x = self.reduce_conv(x)
-        x = self.conv(x) + x
-        x = self.out_conv(x)
-        return x
-
-
-class LSSFPN(BaseLSSFPN):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.depth_aggregation_net = self._configure_depth_aggregation_net()
-
-    def _configure_depth_aggregation_net(self):
-        """build pixel cloud feature extractor"""
-        return DepthAggregation(self.output_channels, self.output_channels,
-                                self.output_channels)
-
-    def _forward_voxel_net(self, img_feat_with_depth):
-        # BEVConv2D [n, c, d, h, w] -> [n, h, c, w, d]
-        img_feat_with_depth = img_feat_with_depth.permute(
-            0, 3, 1, 4, 2).contiguous()  # [n, c, d, h, w] -> [n, h, c, w, d]
-        n, h, c, w, d = img_feat_with_depth.shape
-        img_feat_with_depth = img_feat_with_depth.view(-1, c, w, d)
-        img_feat_with_depth = (
-            self.depth_aggregation_net(img_feat_with_depth).view(
-                n, h, c, w, d).permute(0, 2, 4, 1, 3).contiguous().float())
-        return img_feat_with_depth
-
-
-class BEVDepth(BaseBEVDepth):
-    def __init__(self, backbone_conf, head_conf, is_train_depth=True):
-        super(BaseBEVDepth, self).__init__()
-        self.backbone = LSSFPN(**backbone_conf)
-        self.head = BEVDepthHead(**head_conf)
-        self.is_train_depth = is_train_depth
 
 
 class BEVDepthLightningModel(BaseBEVDepthLightningModel):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.model = BEVDepth(self.backbone_conf,
-                              self.head_conf,
-                              is_train_depth=True)
+        self.backbone_conf['use_da'] = True
         self.data_use_cbgs = True
+        self.model = BaseBEVDepth(self.backbone_conf,
+                                  self.head_conf,
+                                  is_train_depth=True)
 
     def configure_optimizers(self):
         lr = self.basic_lr_per_img * \
