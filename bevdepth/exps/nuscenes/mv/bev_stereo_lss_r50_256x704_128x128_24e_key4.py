@@ -21,7 +21,7 @@ bicycle 0.325   0.512   0.261   0.942   0.221   0.002
 traffic_cone    0.489   0.503   0.345   nan     nan     nan
 barrier 0.495   0.468   0.280   0.206   nan     nan
 """
-from bevdepth.exps.nuscenes.base_cli import run_cli
+from bevdepth.exps.base_cli import run_cli
 from bevdepth.exps.nuscenes.mv.bev_stereo_lss_r50_256x704_128x128_24e_2key import \
     BEVDepthLightningModel as BaseBEVDepthLightningModel  # noqa
 

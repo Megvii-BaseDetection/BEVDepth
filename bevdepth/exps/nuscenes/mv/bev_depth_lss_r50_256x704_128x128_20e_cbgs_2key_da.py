@@ -24,7 +24,7 @@ barrier 0.559   0.392   0.289   0.124   nan     nan
 import torch
 from torch.optim.lr_scheduler import MultiStepLR
 
-from bevdepth.exps.nuscenes.base_cli import run_cli
+from bevdepth.exps.base_cli import run_cli
 from bevdepth.exps.nuscenes.mv.bev_depth_lss_r50_256x704_128x128_24e_2key import \
     BEVDepthLightningModel as BaseBEVDepthLightningModel  # noqa
 from bevdepth.models.base_bev_depth import BaseBEVDepth as BaseBEVDepth

@@ -1,5 +1,5 @@
 # Copyright (c) Megvii Inc. All rights reserved.
-from bevdepth.exps.nuscenes.base_cli import run_cli
+from bevdepth.exps.base_cli import run_cli
 from bevdepth.exps.nuscenes.fusion.bev_depth_fusion_lss_r50_256x704_128x128_24e import \
     BEVDepthLightningModel as BaseBEVDepthLightningModel  # noqa
 from bevdepth.models.fusion_bev_depth import FusionBEVDepth
