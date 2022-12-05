@@ -7,6 +7,11 @@ estimation. For more details, please refer to our [paper on Arxiv](https://arxiv
 ## BEVStereo
 BEVStereo is a new multi-view 3D object detector using temporal stereo to enhance depth estimation.
 <img src="assets/bevstereo.png" width="1000" >
+
+## MatrixVT
+[MatrixVT](bevdepth/exps/nuscenes/MatrixVT/matrixvt_bev_depth_lss_r50_256x704_128x128_24e_ema.py) is a novel View Transformer for BEV paradigm with high efficiency and without customized operators. For more details, please refer to our [paper on Arxiv](https://arxiv.org/abs/2211.10593). Try MatrixVT on **CPU** by run [this file](bevdepth/exps/nuscenes/MatrixVT/matrixvt.py) !
+<img src="assets/matrixvt.jpg" width="1000" >
+
 ## Updates!!
 * 【2022/11/30】 We updated our paper(BEVDepth) on [Arxiv](https://arxiv.org/abs/2206.10092).
 * 【2022/09/22】 We released our paper(BEVStereo) on [Arxiv](https://arxiv.org/abs/2209.10248).
@@ -89,7 +94,7 @@ Due to the working mechanism of EMA, the model parameters saved by ckpt are diff
 
 We used the customized EMA callback and this function is not supported for now.
 
-## Cite BEVDepth & BEVStereo
+## Cite BEVDepth & BEVStereo & MatrixVT
 If you use BEVDepth and BEVStereo in your research, please cite our work by using the following BibTeX entry:
 
 ```latex
@@ -103,6 +108,12 @@ If you use BEVDepth and BEVStereo in your research, please cite our work by usin
   title={Bevstereo: Enhancing depth estimation in multi-view 3d object detection with dynamic temporal stereo},
   author={Li, Yinhao and Bao, Han and Ge, Zheng and Yang, Jinrong and Sun, Jianjian and Li, Zeming},
   journal={arXiv preprint arXiv:2209.10248},
+  year={2022}
+}
+@article{zhou2022matrixvt,
+  title={MatrixVT: Efficient Multi-Camera to BEV Transformation for 3D Perception},
+  author={Zhou, Hongyu and Ge, Zheng and Li, Zeming and Zhang, Xiangyu},
+  journal={arXiv preprint arXiv:2211.10593},
   year={2022}
 }
 ```
