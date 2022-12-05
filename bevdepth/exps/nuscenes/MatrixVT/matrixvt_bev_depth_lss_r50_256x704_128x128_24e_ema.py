@@ -7,7 +7,7 @@ from exps.mv.bev_depth_lss_r50_256x704_128x128_24e_ema_cbgs import (
     BEVDepthLightningModel as BaseExp,
 )
 
-from exps.MatrixVT.matrixvt import MatrixVT
+from layers.backbones.matrixvt import MatrixVT
 from layers.heads.bev_depth_head import BEVDepthHead
 
 

@@ -9,7 +9,7 @@ BEVStereo is a new multi-view 3D object detector using temporal stereo to enhanc
 <img src="assets/bevstereo.png" width="1000" >
 
 ## MatrixVT
-[MatrixVT](bevdepth/exps/nuscenes/MatrixVT/matrixvt_bev_depth_lss_r50_256x704_128x128_24e_ema.py) is a novel View Transformer for BEV paradigm with high efficiency and without customized operators. For more details, please refer to our [paper on Arxiv](https://arxiv.org/abs/2211.10593). Try MatrixVT on **CPU** by run [this file](bevdepth/exps/nuscenes/MatrixVT/matrixvt.py) !
+[MatrixVT](bevdepth/exps/nuscenes/MatrixVT/matrixvt_bev_depth_lss_r50_256x704_128x128_24e_ema.py) is a novel View Transformer for BEV paradigm with high efficiency and without customized operators. For more details, please refer to our [paper on Arxiv](https://arxiv.org/abs/2211.10593). Try MatrixVT on **CPU** by run [this file](bevdepth/layers/backbones/matrixvt.py) !
 <img src="assets/matrixvt.jpg" width="1000" >
 
 ## Updates!!
