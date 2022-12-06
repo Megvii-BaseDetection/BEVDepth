@@ -13,6 +13,7 @@ BEVStereo is a new multi-view 3D object detector using temporal stereo to enhanc
 <img src="assets/matrixvt.jpg" width="1000" >
 
 ## Updates!!
+* 【2022/12/06】 We released our new View Transformer (MatrixVT), the paper is on [Arxiv](https://arxiv.org/abs/2211.10593).
 * 【2022/11/30】 We updated our paper(BEVDepth) on [Arxiv](https://arxiv.org/abs/2206.10092).
 * 【2022/09/22】 We released our paper(BEVStereo) on [Arxiv](https://arxiv.org/abs/2209.10248).
 * 【2022/08/24】 We submitted our result(BEVStereo) on [nuScenes Detection Task](https://nuscenes.org/object-detection?externalData=all&mapData=all&modalities=Camera) and achieved the SOTA.
