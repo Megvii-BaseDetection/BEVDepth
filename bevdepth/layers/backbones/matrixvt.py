@@ -2,8 +2,8 @@
 import torch
 from torch import nn
 from torch.cuda.amp import autocast
+from bevdepth.layers.backbones.base_lss_fpn import BaseLSSFPN
 
-from layers.backbones.base_lss_fpn import DepthNet
 
 class HoriConv(nn.Module):
     def __init__(self, in_channels, mid_channels, out_channels, cat_dim=0):
@@ -14,7 +14,7 @@ class HoriConv(nn.Module):
             mid_channels (int): mid_channels
             out_channels (int): output channels
             cat_dim (int, optional): channels of position embedding. Defaults to 0.
-        """        
+        """
         super().__init__()
 
         self.merger = nn.Sequential(
@@ -117,7 +117,7 @@ class DepthReducer(nn.Module):
         Args:
             img_channels (int): in_channels
             mid_channels (int): mid_channels
-        """        
+        """
         super().__init__()
         self.vertical_weighter = nn.Sequential(
             nn.Conv2d(img_channels, mid_channels, kernel_size=3, stride=1, padding=1),
@@ -132,8 +132,9 @@ class DepthReducer(nn.Module):
         depth = (depth * vert_weight).sum(2)
         return depth
 
+
 # NOTE Modified Lift-Splat
-class MatrixVT(nn.Module):
+class MatrixVT(BaseLSSFPN):
     def __init__(
         self,
         x_bound,
@@ -147,47 +148,37 @@ class MatrixVT(nn.Module):
         img_neck_conf,
         depth_net_conf,
     ):
-        super().__init__()
-        self.downsample_factor = downsample_factor
-        self.d_bound = d_bound
-        self.final_dim = final_dim
-        self.output_channels = output_channels
+        """Modified from LSSFPN.
 
-        self.register_buffer(
-            "voxel_size", torch.Tensor([row[2] for row in [x_bound, y_bound, z_bound]])
+        Args:
+            x_bound (list): Boundaries for x.
+            y_bound (list): Boundaries for y.
+            z_bound (list): Boundaries for z.
+            d_bound (list): Boundaries for d.
+            final_dim (list): Dimension for input images.
+            downsample_factor (int): Downsample factor between feature map
+                and input image.
+            output_channels (int): Number of channels for the output
+                feature map.
+            img_backbone_conf (dict): Config for image backbone.
+            img_neck_conf (dict): Config for image neck.
+            depth_net_conf (dict): Config for depth net.
+        """
+        super().__init__(
+            x_bound,
+            y_bound,
+            z_bound,
+            d_bound,
+            final_dim,
+            downsample_factor,
+            output_channels,
+            img_backbone_conf,
+            img_neck_conf,
+            depth_net_conf,
+            use_da=False,
         )
-        self.register_buffer(
-            "voxel_coord",
-            torch.Tensor(
-                [row[0] + row[2] / 2.0 for row in [x_bound, y_bound, z_bound]]
-            ),
-        )
-        self.register_buffer(
-            "voxel_num",
-            torch.LongTensor(
-                [(row[1] - row[0]) / row[2] for row in [x_bound, y_bound, z_bound]]
-            ),
-        )
-        self.register_buffer("frustum", self.create_frustum())
+
         self.register_buffer("bev_anchors", self.create_bev_anchors(x_bound, y_bound))
-        self.depth_channels, _, _, _ = self.frustum.shape
-
-        from mmdet3d.models import build_neck
-        from mmdet.models import build_backbone
-
-        self.img_backbone = build_backbone(img_backbone_conf)
-        self.img_neck = build_neck(img_neck_conf)
-
-        self.img_neck.init_weights()
-        self.img_backbone.init_weights()
-
-        self.depth_net = DepthNet(
-            depth_net_conf["in_channels"],
-            depth_net_conf["mid_channels"],
-            self.output_channels,
-            self.depth_channels,
-        )
-
         self.horiconv = HoriConv(self.output_channels, 512, self.output_channels)
         self.depth_reducer = DepthReducer(self.output_channels, self.output_channels)
         self.static_mat = None
@@ -202,7 +193,7 @@ class MatrixVT(nn.Module):
 
         Returns:
             anchors: anchors in [W, H, 2]
-        """        
+        """
         x_coords = (
             (
                 torch.linspace(
@@ -233,76 +224,6 @@ class MatrixVT(nn.Module):
         anchors = torch.stack([x_coords, y_coords]).permute(1, 2, 0)
         return anchors
 
-    def create_frustum(self):
-        """Generate frustum"""
-        # make grid in image plane
-        ogfH, ogfW = self.final_dim
-        fH, fW = ogfH // self.downsample_factor, ogfW // self.downsample_factor
-        d_coords = (
-            torch.arange(*self.d_bound, dtype=torch.float)
-            .view(-1, 1, 1)
-            .expand(-1, fH, fW)
-        )
-        D, _, _ = d_coords.shape
-        x_coords = (
-            torch.linspace(0, ogfW - 1, fW, dtype=torch.float)
-            .view(1, 1, fW)
-            .expand(D, fH, fW)
-        )
-        y_coords = (
-            torch.linspace(0, ogfH - 1, fH, dtype=torch.float)
-            .view(1, fH, 1)
-            .expand(D, fH, fW)
-        )
-        paddings = torch.ones_like(d_coords)
-
-        # D x H x W x 3
-        frustum = torch.stack((x_coords, y_coords, d_coords, paddings), -1)
-        return frustum
-
-    def get_geometry(self, sensor2ego_mat, intrin_mat, ida_mat, bda_mat):
-        """Transfer points from camera coord to ego coord.
-
-        Args:
-            rots(Tensor): Rotation matrix from camera to ego.
-            trans(Tensor): Translation matrix from camera to ego.
-            intrins(Tensor): Intrinsic matrix.
-            post_rots_ida(Tensor): Rotation matrix for ida.
-            post_trans_ida(Tensor): Translation matrix for ida
-            post_rot_bda(Tensor): Rotation matrix for bda.
-
-        Returns:
-            Tensors: points ego coord.
-        """
-        batch_size, num_cams, _, _ = sensor2ego_mat.shape
-
-        # undo post-transformation
-        # B x N x D x H x W x 3
-        points = self.frustum
-        ida_mat = ida_mat.view(batch_size, num_cams, 1, 1, 1, 4, 4)
-        points = ida_mat.inverse().matmul(points.unsqueeze(-1))
-        # cam_to_ego
-        points = torch.cat(
-            (
-                points[:, :, :, :, :, :2] * points[:, :, :, :, :, 2:3],
-                points[:, :, :, :, :, 2:],
-            ),
-            5,
-        )
-
-        combine = sensor2ego_mat.matmul(torch.inverse(intrin_mat))
-        points = combine.view(batch_size, num_cams, 1, 1, 1, 4, 4).matmul(points)
-        if bda_mat is not None:
-            bda_mat = (
-                bda_mat.unsqueeze(1)
-                .repeat(1, num_cams, 1, 1)
-                .view(batch_size, num_cams, 1, 1, 1, 4, 4)
-            )
-            points = (bda_mat @ points).squeeze(-1)
-        else:
-            points = points.squeeze(-1)
-        return points[..., :3]
-
     def get_proj_mat(self, mats_dict=None):
         """Create the Ring Matrix and Ray Matrix
 
@@ -312,7 +233,7 @@ class MatrixVT(nn.Module):
 
         Returns:
             tuple: Ring Matrix in [B, D, L, L] and Ray Matrix in [B, W, L, L]
-        """        
+        """
         if self.static_mat is not None:
             return self.static_mat
 
@@ -369,7 +290,7 @@ class MatrixVT(nn.Module):
 
         Returns:
             Tensor: BEV feature in B, C, L, L
-        """        
+        """
         # [N,112,H,W], [N,256,H,W]
         depth = self.depth_reducer(feature, depth)
 
@@ -392,24 +313,6 @@ class MatrixVT(nn.Module):
         )
 
         return img_feat_with_depth
-
-    def get_cam_feats(self, imgs):
-        """Get feature maps from images."""
-        batch_size, num_sweeps, num_cams, num_channels, imH, imW = imgs.shape
-
-        imgs = imgs.flatten().view(
-            batch_size * num_sweeps * num_cams, num_channels, imH, imW
-        )
-        img_feats = self.img_neck(self.img_backbone(imgs))[0]
-        img_feats = img_feats.reshape(
-            batch_size,
-            num_sweeps,
-            num_cams,
-            img_feats.shape[1],
-            img_feats.shape[2],
-            img_feats.shape[3],
-        )
-        return img_feats
 
     def _forward_single_sweep(
         self, sweep_index, sweep_imgs, mats_dict, is_return_depth=False
@@ -446,64 +349,6 @@ class MatrixVT(nn.Module):
             if is_return_depth:
                 return img_feat_with_depth.contiguous(), depth
             return img_feat_with_depth.contiguous()
-
-    def forward(self, sweep_imgs, mats_dict, timestamps=None, is_return_depth=False):
-        """Forward function.
-
-        Args:
-            sweep_imgs(Tensor): Input images with shape of (B, num_sweeps,
-                num_cameras, 3, H, W).
-            mats_dict(dict):
-                sensor2ego_mats(Tensor): Transformation matrix from
-                    camera to ego with shape of (B, num_sweeps,
-                    num_cameras, 4, 4).
-                intrin_mats(Tensor): Intrinsic matrix with shape
-                    of (B, num_sweeps, num_cameras, 4, 4).
-                ida_mats(Tensor): Transformation matrix for ida with
-                    shape of (B, num_sweeps, num_cameras, 4, 4).
-                sensor2sensor_mats(Tensor): Transformation matrix
-                    from key frame camera to sweep frame camera with
-                    shape of (B, num_sweeps, num_cameras, 4, 4).
-                bda_mat(Tensor): Rotation matrix for bda with shape
-                    of (B, 4, 4).
-            timestamps(Tensor): Timestamp for all images with the shape of(B,
-                num_sweeps, num_cameras).
-
-        Return:
-            Tensor: bev feature map.
-        """
-        (
-            batch_size,
-            num_sweeps,
-            num_cams,
-            num_channels,
-            img_height,
-            img_width,
-        ) = sweep_imgs.shape
-
-        key_frame_res = self._forward_single_sweep(
-            0, sweep_imgs[:, 0:1, ...], mats_dict, is_return_depth=is_return_depth
-        )
-        if num_sweeps == 1:
-            return key_frame_res
-
-        key_frame_feature = key_frame_res[0] if is_return_depth else key_frame_res
-
-        ret_feature_list = [key_frame_feature]
-        for sweep_index in range(1, num_sweeps):
-            with torch.no_grad():
-                feature_map = self._forward_single_sweep(
-                    sweep_index,
-                    sweep_imgs[:, sweep_index : sweep_index + 1, ...],
-                    mats_dict,
-                    is_return_depth=False,
-                )
-                ret_feature_list.append(feature_map)
-
-        if is_return_depth:
-            return torch.cat(ret_feature_list, 1), key_frame_res[1]
-        else:
-            return torch.cat(ret_feature_list, 1)
 
 
 if __name__ == "__main__":
@@ -545,6 +390,7 @@ if __name__ == "__main__":
             "sensor2sensor_mats": torch.rand((2, 1, 6, 4, 4)),
             "bda_mat": torch.rand((2, 4, 4)),
         },
+        is_return_depth=True
     )
 
     print(bev_feature.shape, depth.shape)
