@@ -1,14 +1,14 @@
 # Copyright (c) Megvii Inc. All rights reserved.
 import torch
-from exps.base_cli import run_cli
+from bevdepth.exps.base_cli import run_cli
 
 # Basic Experiment
-from exps.mv.bev_depth_lss_r50_256x704_128x128_24e_ema_cbgs import (
+from bevdepth.exps.mv.bev_depth_lss_r50_256x704_128x128_24e_ema_cbgs import (
     BEVDepthLightningModel as BaseExp,
 )
 
 # new model
-from models.matrixvt_det import MatrixVT_Det
+from bevdepth.models.matrixvt_det import MatrixVT_Det
 
 
 class MatrixVT_Exp(BaseExp):

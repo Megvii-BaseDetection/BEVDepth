@@ -1,7 +1,7 @@
 import unittest
 
 import torch
-from layers.backbones.matrixvt import MatrixVT
+from bevdepth.layers.backbones.matrixvt import MatrixVT
 
 
 class TestMatrixVT(unittest.TestCase):
