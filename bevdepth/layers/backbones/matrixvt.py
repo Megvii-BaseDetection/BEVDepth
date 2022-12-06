@@ -132,9 +132,8 @@ class DepthReducer(nn.Module):
         depth = (depth * vert_weight).sum(2)
         return depth
 
-from layers.backbones.base_lss_fpn import BaseLSSFPN
 # NOTE Modified Lift-Splat
-class MatrixVT(BaseLSSFPN):
+class MatrixVT(nn.Module):
     def __init__(
         self,
         x_bound,
