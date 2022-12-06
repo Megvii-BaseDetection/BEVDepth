@@ -8,7 +8,10 @@ from mmdet.models.backbones.resnet import BasicBlock
 from torch import nn
 from torch.cuda.amp.autocast_mode import autocast
 
-from bevdepth.ops.voxel_pooling import voxel_pooling
+try:
+    from bevdepth.ops.voxel_pooling import voxel_pooling
+except:
+    print('Import VoxelPooling fail.')
 
 __all__ = ['BaseLSSFPN']
 
