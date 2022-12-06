@@ -132,9 +132,9 @@ class DepthReducer(nn.Module):
         depth = (depth * vert_weight).sum(2)
         return depth
 
-
+from layers.backbones.base_lss_fpn import BaseLSSFPN
 # NOTE Modified Lift-Splat
-class MatrixVT(nn.Module):
+class MatrixVT(BaseLSSFPN):
     def __init__(
         self,
         x_bound,
@@ -194,6 +194,16 @@ class MatrixVT(nn.Module):
         self.static_mat = None
 
     def create_bev_anchors(self, x_bound, y_bound, ds_rate=1):
+        """Create anchors in BEV space
+
+        Args:
+            x_bound (list): xbound in meters [start, end, step]
+            y_bound (list): ybound in meters [start, end, step]
+            ds_rate (iint, optional): downsample rate. Defaults to 1.
+
+        Returns:
+            anchors: anchors in [W, H, 2]
+        """        
         x_coords = (
             (
                 torch.linspace(
@@ -295,6 +305,15 @@ class MatrixVT(nn.Module):
         return points[..., :3]
 
     def get_proj_mat(self, mats_dict=None):
+        """Create the Ring Matrix and Ray Matrix
+
+        Args:
+            mats_dict (dict, optional): dictionary that contains intrin- and extrin- parameters.
+            Defaults to None.
+
+        Returns:
+            tuple: Ring Matrix in [B, D, L, L] and Ray Matrix in [B, W, L, L]
+        """        
         if self.static_mat is not None:
             return self.static_mat
 
@@ -342,7 +361,16 @@ class MatrixVT(nn.Module):
 
     @autocast(False)
     def reduce_and_project(self, feature, depth, mats_dict):
-        # Reduce and Project
+        """reduce the feature and depth in height dimension and make BEV feature
+
+        Args:
+            feature (Tensor): image feature in [B, C, H, W]
+            depth (Tensor): Depth Prediction in [B, D, H, W]
+            mats_dict (dict): dictionary that contains intrin- annd extrin- parameters
+
+        Returns:
+            Tensor: BEV feature in B, C, L, L
+        """        
         # [N,112,H,W], [N,256,H,W]
         depth = self.depth_reducer(feature, depth)
 
