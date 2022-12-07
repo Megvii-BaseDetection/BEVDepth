@@ -7,6 +7,7 @@ from bevdepth.layers.backbones.base_lss_fpn import BaseLSSFPN
 
 
 class TestLSSFPN(unittest.TestCase):
+
     def setUp(self) -> None:
         backbone_conf = {
             'x_bound': [-10, 10, 0.5],

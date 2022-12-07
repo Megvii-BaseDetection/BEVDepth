@@ -10,13 +10,14 @@ from torch.cuda.amp.autocast_mode import autocast
 
 try:
     from bevdepth.ops.voxel_pooling import voxel_pooling
-except:
+except ImportError:
     print('Import VoxelPooling fail.')
 
 __all__ = ['BaseLSSFPN']
 
 
 class _ASPPModule(nn.Module):
+
     def __init__(self, inplanes, planes, kernel_size, padding, dilation,
                  BatchNorm):
         super(_ASPPModule, self).__init__()
@@ -48,6 +49,7 @@ class _ASPPModule(nn.Module):
 
 
 class ASPP(nn.Module):
+
     def __init__(self, inplanes, mid_channels=256, BatchNorm=nn.BatchNorm2d):
         super(ASPP, self).__init__()
 
@@ -121,6 +123,7 @@ class ASPP(nn.Module):
 
 
 class Mlp(nn.Module):
+
     def __init__(self,
                  in_features,
                  hidden_features=None,
@@ -146,6 +149,7 @@ class Mlp(nn.Module):
 
 
 class SELayer(nn.Module):
+
     def __init__(self, channels, act_layer=nn.ReLU, gate_layer=nn.Sigmoid):
         super().__init__()
         self.conv_reduce = nn.Conv2d(channels, channels, 1, bias=True)
@@ -161,6 +165,7 @@ class SELayer(nn.Module):
 
 
 class DepthNet(nn.Module):
+
     def __init__(self, in_channels, mid_channels, context_channels,
                  depth_channels):
         super(DepthNet, self).__init__()
@@ -253,6 +258,7 @@ class DepthAggregation(nn.Module):
     """
     pixel cloud feature extraction
     """
+
     def __init__(self, in_channels, mid_channels, out_channels):
         super(DepthAggregation, self).__init__()
 
@@ -306,6 +312,7 @@ class DepthAggregation(nn.Module):
 
 
 class BaseLSSFPN(nn.Module):
+
     def __init__(self,
                  x_bound,
                  y_bound,

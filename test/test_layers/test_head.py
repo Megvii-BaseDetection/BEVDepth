@@ -8,6 +8,7 @@ from bevdepth.layers.heads.bev_depth_head import BEVDepthHead
 
 
 class TestLSSFPN(unittest.TestCase):
+
     def setUp(self) -> None:
         bev_backbone = dict(
             type='ResNet',

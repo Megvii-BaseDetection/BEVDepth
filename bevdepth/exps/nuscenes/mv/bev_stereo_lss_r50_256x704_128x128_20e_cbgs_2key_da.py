@@ -31,6 +31,7 @@ from bevdepth.models.bev_stereo import BEVStereo
 
 
 class BEVDepthLightningModel(BaseBEVDepthLightningModel):
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.backbone_conf['use_da'] = True

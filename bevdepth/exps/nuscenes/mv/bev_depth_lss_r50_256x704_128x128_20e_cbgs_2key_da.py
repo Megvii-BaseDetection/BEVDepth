@@ -31,6 +31,7 @@ from bevdepth.models.base_bev_depth import BaseBEVDepth as BaseBEVDepth
 
 
 class BEVDepthLightningModel(BaseBEVDepthLightningModel):
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.backbone_conf['use_da'] = True

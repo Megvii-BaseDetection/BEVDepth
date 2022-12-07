@@ -99,6 +99,7 @@ class BEVDepthHead(CenterHead):
         bev_backbone_conf(dict): Cnfig of bev_backbone.
         bev_neck_conf(dict): Cnfig of bev_neck.
     """
+
     def __init__(
         self,
         in_channels=256,

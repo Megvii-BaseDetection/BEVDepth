@@ -6,6 +6,7 @@ from .bev_depth_fusion_lss_r50_256x704_128x128_24e_2key import \
 
 
 class BEVDepthLightningModel(BaseBEVDepthLightningModel):
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.train_info_paths = [

@@ -6,6 +6,7 @@ from bevdepth.models.fusion_bev_depth import FusionBEVDepth
 
 
 class BEVDepthLightningModel(BaseBEVDepthLightningModel):
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.key_idxes = [-1]

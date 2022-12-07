@@ -10,6 +10,7 @@ from bevdepth.exps.nuscenes.base_exp import \
 
 
 class BEVDepthLightningModel(BaseBEVDepthLightningModel):
+
     def configure_optimizers(self):
         lr = self.basic_lr_per_img * \
             self.batch_size_per_device * self.gpus

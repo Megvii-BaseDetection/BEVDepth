@@ -9,7 +9,9 @@ import numpy as np
 from nuscenes.utils.data_classes import Box, LidarPointCloud
 from pyquaternion import Quaternion
 
-from bevdepth.datasets.nusc_det_dataset import map_name_from_general_to_detection
+from bevdepth.datasets.nusc_det_dataset import \
+    map_name_from_general_to_detection
+
 
 def parse_args():
     parser = ArgumentParser(add_help=False)

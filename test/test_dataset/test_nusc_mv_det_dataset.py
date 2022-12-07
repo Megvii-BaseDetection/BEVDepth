@@ -52,6 +52,7 @@ bda_aug_conf = {
 
 
 class TestNuscMVDetData(unittest.TestCase):
+
     def test_voxel_pooling(self):
         np.random.seed(0)
         torch.random.manual_seed(0)
