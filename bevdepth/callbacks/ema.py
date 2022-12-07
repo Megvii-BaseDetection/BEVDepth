@@ -33,11 +33,12 @@ class ModelEMA:
     This class is sensitive where it is initialized in the sequence
     of model init, GPU assignment and distributed training wrappers.
     """
+
     def __init__(self, model, decay=0.9999, updates=0):
         """
         Args:
             model (nn.Module): model to apply EMA.
-            decay (float): ema decay reate.
+            decay (float): ema decay.
             updates (int): counter of EMA updates.
         """
         # Create EMA(FP32)
@@ -64,6 +65,7 @@ class ModelEMA:
 
 
 class EMACallback(Callback):
+
     def __init__(self, len_updates) -> None:
         super().__init__()
         self.len_updates = len_updates

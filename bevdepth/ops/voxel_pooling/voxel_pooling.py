@@ -6,6 +6,7 @@ from . import voxel_pooling_ext
 
 
 class VoxelPooling(Function):
+
     @staticmethod
     def forward(ctx, geom_xyz: torch.Tensor, input_features: torch.Tensor,
                 voxel_num: torch.Tensor) -> torch.Tensor:

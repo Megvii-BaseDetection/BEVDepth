@@ -19,6 +19,7 @@ __all__ = ['BEVStereoLSSFPN']
 
 class ConvBnReLU3D(nn.Module):
     """Implements of 3d convolution + batch normalization + ReLU."""
+
     def __init__(
         self,
         in_channels: int,
@@ -28,7 +29,8 @@ class ConvBnReLU3D(nn.Module):
         pad: int = 1,
         dilation: int = 1,
     ) -> None:
-        """initialization method for convolution3D + batch normalization + relu module
+        """initialization method for convolution3D +
+            batch normalization + relu module
         Args:
             in_channels: input channel number of convolution layer
             out_channels: output channel number of convolution layer
@@ -53,6 +55,7 @@ class ConvBnReLU3D(nn.Module):
 
 
 class DepthNet(nn.Module):
+
     def __init__(self,
                  in_channels,
                  mid_channels,
@@ -188,6 +191,7 @@ class DepthNet(nn.Module):
 
 
 class BEVStereoLSSFPN(BaseLSSFPN):
+
     def __init__(self,
                  x_bound,
                  y_bound,
@@ -418,30 +422,30 @@ class BEVStereoLSSFPN(BaseLSSFPN):
             points = points.reshape(points.shape[0], -1, points.shape[-1])
             points[..., 2] = 1
             # Undo ida for key frame.
-            points = key_ida_mats.reshape(batch_size_with_num_cams,
-                                          *key_ida_mats.shape[2:]).inverse(
+            points = key_ida_mats.reshape(batch_size_with_num_cams, *
+                                          key_ida_mats.shape[2:]).inverse(
                                           ).unsqueeze(1) @ points.unsqueeze(-1)
             # Convert points from pixel coord to key camera coord.
             points[..., :3, :] *= depth_sample.reshape(
                 batch_size_with_num_cams, -1, 1, 1)
             num_depth = frustum.shape[1]
             points = (key_intrin_mats.reshape(
-                batch_size_with_num_cams,
-                *key_intrin_mats.shape[2:]).inverse().unsqueeze(1) @ points)
+                batch_size_with_num_cams, *
+                key_intrin_mats.shape[2:]).inverse().unsqueeze(1) @ points)
             points = (sensor2sensor_mats.reshape(
-                batch_size_with_num_cams,
-                *sensor2sensor_mats.shape[2:]).unsqueeze(1) @ points)
+                batch_size_with_num_cams, *
+                sensor2sensor_mats.shape[2:]).unsqueeze(1) @ points)
             # points in sweep sensor coord.
             points = (sweep_intrin_mats.reshape(
-                batch_size_with_num_cams,
-                *sweep_intrin_mats.shape[2:]).unsqueeze(1) @ points)
+                batch_size_with_num_cams, *
+                sweep_intrin_mats.shape[2:]).unsqueeze(1) @ points)
             # points in sweep pixel coord.
             points[..., :2, :] = points[..., :2, :] / points[
                 ..., 2:3, :]  # [B, 2, Ndepth, H*W]
 
             points = (sweep_ida_mats.reshape(
-                batch_size_with_num_cams,
-                *sweep_ida_mats.shape[2:]).unsqueeze(1) @ points).squeeze(-1)
+                batch_size_with_num_cams, *
+                sweep_ida_mats.shape[2:]).unsqueeze(1) @ points).squeeze(-1)
             neg_mask = points[..., 2] < 1e-3
             points[..., 0][neg_mask] = width * self.stereo_downsample_factor
             points[..., 1][neg_mask] = height * self.stereo_downsample_factor

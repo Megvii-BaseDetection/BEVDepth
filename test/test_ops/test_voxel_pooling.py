@@ -7,6 +7,7 @@ from bevdepth.ops.voxel_pooling import voxel_pooling
 
 
 class TestLSSFPN(unittest.TestCase):
+
     @pytest.mark.skipif(condition=torch.cuda.is_available() is False,
                         reason='No gpu available.')
     def test_voxel_pooling(self):

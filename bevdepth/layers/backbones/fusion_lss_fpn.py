@@ -11,6 +11,7 @@ __all__ = ['FusionLSSFPN']
 
 
 class DepthNet(nn.Module):
+
     def __init__(self, in_channels, mid_channels, context_channels,
                  depth_channels):
         super(DepthNet, self).__init__()
@@ -68,6 +69,7 @@ class DepthNet(nn.Module):
 
 
 class FusionLSSFPN(BaseLSSFPN):
+
     def _configure_depth_net(self, depth_net_conf):
         return DepthNet(
             depth_net_conf['in_channels'],

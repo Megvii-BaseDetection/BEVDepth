@@ -9,7 +9,6 @@ gitlint
 isort==4.3.21
 nbsphinx
 pre-commit
-pre-commit==2.7.1
 pylint==2.3.1
 pytest
 pytest-cov

@@ -11,6 +11,7 @@ from bevdepth.models.fusion_bev_depth import FusionBEVDepth
 
 
 class BEVDepthLightningModel(BaseBEVDepthLightningModel):
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.model = FusionBEVDepth(self.backbone_conf,

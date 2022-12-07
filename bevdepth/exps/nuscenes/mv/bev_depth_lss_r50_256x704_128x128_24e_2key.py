@@ -29,6 +29,7 @@ from bevdepth.models.base_bev_depth import BaseBEVDepth
 
 
 class BEVDepthLightningModel(BaseBEVDepthLightningModel):
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.key_idxes = [-1]

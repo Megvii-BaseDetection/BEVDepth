@@ -27,6 +27,7 @@ from bevdepth.exps.nuscenes.mv.bev_stereo_lss_r50_256x704_128x128_24e_2key impor
 
 
 class BEVDepthLightningModel(BaseBEVDepthLightningModel):
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.num_sweeps = 2
