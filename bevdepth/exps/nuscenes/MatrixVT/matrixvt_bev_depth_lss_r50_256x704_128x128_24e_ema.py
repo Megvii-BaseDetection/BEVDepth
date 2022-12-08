@@ -1,7 +1,7 @@
 # Copyright (c) Megvii Inc. All rights reserved.
 from bevdepth.exps.base_cli import run_cli
 # Basic Experiment
-from bevdepth.exps.mv.bev_depth_lss_r50_256x704_128x128_24e_ema_cbgs import \
+from bevdepth.exps.nuscenes.mv.bev_depth_lss_r50_256x704_128x128_24e_ema import \
     BEVDepthLightningModel as BaseExp
 # new model
 from bevdepth.models.matrixvt_det import MatrixVT_Det
