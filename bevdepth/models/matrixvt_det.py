@@ -13,6 +13,5 @@ class MatrixVT_Det(BaseBEVDepth):
     """
 
     def __init__(self, backbone_conf, head_conf, is_train_depth=False):
-        super(BaseBEVDepth, self).__init__()
+        super().__init__(backbone_conf, head_conf, is_train_depth)
         self.backbone = MatrixVT(**backbone_conf)
-        self.is_train_depth = is_train_depth
