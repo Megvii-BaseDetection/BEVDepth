@@ -54,4 +54,4 @@ class BEVDepthLightningModel(BaseBEVDepthLightningModel):
 if __name__ == '__main__':
     run_cli(BEVDepthLightningModel,
             'bev_stereo_lss_r50_256x704_128x128_20e_cbgs_2key_da',
-            extra_trainer_config_args={"epochs": 20})
+            extra_trainer_config_args={'epochs': 20})
