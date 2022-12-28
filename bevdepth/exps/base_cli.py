@@ -13,8 +13,7 @@ from .nuscenes.base_exp import BEVDepthLightningModel
 def run_cli(model_class=BEVDepthLightningModel,
             exp_name='base_exp',
             use_ema=False,
-            extra_trainer_config_args={}
-    ):
+            extra_trainer_config_args={}):
     parent_parser = ArgumentParser(add_help=False)
     parent_parser = pl.Trainer.add_argparse_args(parent_parser)
     parent_parser.add_argument('-e',
