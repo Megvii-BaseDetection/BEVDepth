@@ -9,7 +9,8 @@ from torch import nn
 from torch.cuda.amp.autocast_mode import autocast
 
 try:
-    from bevdepth.ops.voxel_pooling import voxel_pooling
+    from bevdepth.ops.voxel_pooling_inference import voxel_pooling_inference
+    from bevdepth.ops.voxel_pooling_train import voxel_pooling_train
 except ImportError:
     print('Import VoxelPooling fail.')
 
@@ -397,7 +398,7 @@ class BaseLSSFPN(nn.Module):
             img_feat_with_depth = img_feat_with_depth.view(-1, c, w, d)
             img_feat_with_depth = (
                 self.depth_aggregation_net(img_feat_with_depth).view(
-                    n, h, c, w, d).permute(0, 2, 4, 1, 3).contiguous().float())
+                    n, h, c, w, d).permute(0, 2, 4, 1, 3).contiguous())
         return img_feat_with_depth
 
     def create_frustum(self):
@@ -512,34 +513,44 @@ class BaseLSSFPN(nn.Module):
                                     source_features.shape[4]),
             mats_dict,
         )
-        depth = depth_feature[:, :self.depth_channels].softmax(1)
-        img_feat_with_depth = depth.unsqueeze(
-            1) * depth_feature[:, self.depth_channels:(
-                self.depth_channels + self.output_channels)].unsqueeze(2)
-
-        img_feat_with_depth = self._forward_voxel_net(img_feat_with_depth)
-
-        img_feat_with_depth = img_feat_with_depth.reshape(
-            batch_size,
-            num_cams,
-            img_feat_with_depth.shape[1],
-            img_feat_with_depth.shape[2],
-            img_feat_with_depth.shape[3],
-            img_feat_with_depth.shape[4],
-        )
+        depth = depth_feature[:, :self.depth_channels].softmax(
+            dim=1, dtype=depth_feature.dtype)
         geom_xyz = self.get_geometry(
             mats_dict['sensor2ego_mats'][:, sweep_index, ...],
             mats_dict['intrin_mats'][:, sweep_index, ...],
             mats_dict['ida_mats'][:, sweep_index, ...],
             mats_dict.get('bda_mat', None),
         )
-        img_feat_with_depth = img_feat_with_depth.permute(0, 1, 3, 4, 5, 2)
         geom_xyz = ((geom_xyz - (self.voxel_coord - self.voxel_size / 2.0)) /
                     self.voxel_size).int()
-        feature_map = voxel_pooling(geom_xyz, img_feat_with_depth.contiguous(),
-                                    self.voxel_num.cuda())
+        if self.training or self.use_da:
+            img_feat_with_depth = depth.unsqueeze(
+                1) * depth_feature[:, self.depth_channels:(
+                    self.depth_channels + self.output_channels)].unsqueeze(2)
+
+            img_feat_with_depth = self._forward_voxel_net(img_feat_with_depth)
+
+            img_feat_with_depth = img_feat_with_depth.reshape(
+                batch_size,
+                num_cams,
+                img_feat_with_depth.shape[1],
+                img_feat_with_depth.shape[2],
+                img_feat_with_depth.shape[3],
+                img_feat_with_depth.shape[4],
+            )
+
+            img_feat_with_depth = img_feat_with_depth.permute(0, 1, 3, 4, 5, 2)
+
+            feature_map = voxel_pooling_train(geom_xyz,
+                                              img_feat_with_depth.contiguous(),
+                                              self.voxel_num.cuda())
+        else:
+            feature_map = voxel_pooling_inference(
+                geom_xyz, depth, depth_feature[:, self.depth_channels:(
+                    self.depth_channels + self.output_channels)].contiguous(),
+                self.voxel_num.cuda())
         if is_return_depth:
-            return feature_map.contiguous(), depth
+            return feature_map.contiguous(), depth.float()
         return feature_map.contiguous()
 
     def forward(self,

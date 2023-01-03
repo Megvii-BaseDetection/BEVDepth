@@ -1,4 +1,5 @@
 // Copyright (c) Megvii Inc. All rights reserved.
+#include <cuda_fp16.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,10 +9,11 @@
 #define THREADS_PER_BLOCK THREADS_BLOCK_X *THREADS_BLOCK_Y
 #define DIVUP(m, n) ((m) / (n) + ((m) % (n) > 0))
 
-__global__ void voxel_pooling_forward_kernel(
+template <typename T>
+__global__ void voxel_pooling_train_forward_kernel(
     int batch_size, int num_points, int num_channels, int num_voxel_x,
     int num_voxel_y, int num_voxel_z, const int *geom_xyz,
-    const float *input_features, float *output_features, int *pos_memo) {
+    const T *input_features, T *output_features, int *pos_memo) {
   const int bidx = blockIdx.x;
   const int tidx = threadIdx.x;
   const int tidy = threadIdx.y;
@@ -64,19 +66,37 @@ __global__ void voxel_pooling_forward_kernel(
   }
 }
 
-void voxel_pooling_forward_kernel_launcher(int batch_size, int num_points,
-                                           int num_channels, int num_voxel_x,
-                                           int num_voxel_y, int num_voxel_z,
-                                           const int *geom_xyz,
-                                           const float *input_features,
-                                           float *output_features,
-                                           int *pos_memo, cudaStream_t stream) {
+void voxel_pooling_train_forward_kernel_launcher(
+    int batch_size, int num_points, int num_channels, int num_voxel_x,
+    int num_voxel_y, int num_voxel_z, const int *geom_xyz,
+    const float *input_features, float *output_features, int *pos_memo,
+    cudaStream_t stream) {
   cudaError_t err;
 
   dim3 blocks(DIVUP(batch_size * num_points, THREADS_PER_BLOCK));
   dim3 threads(THREADS_BLOCK_X, THREADS_BLOCK_Y);
 
-  voxel_pooling_forward_kernel<<<blocks, threads, 0, stream>>>(
+  voxel_pooling_train_forward_kernel<<<blocks, threads, 0, stream>>>(
+      batch_size, num_points, num_channels, num_voxel_x, num_voxel_y,
+      num_voxel_z, geom_xyz, input_features, output_features, pos_memo);
+  err = cudaGetLastError();
+  if (cudaSuccess != err) {
+    fprintf(stderr, "CUDA kernel failed : %s\n", cudaGetErrorString(err));
+    exit(-1);
+  }
+}
+
+void voxel_pooling_train_forward_kernel_launcher(
+    int batch_size, int num_points, int num_channels, int num_voxel_x,
+    int num_voxel_y, int num_voxel_z, const int *geom_xyz,
+    const half2 *input_features, half2 *output_features, int *pos_memo,
+    cudaStream_t stream) {
+  cudaError_t err;
+
+  dim3 blocks(DIVUP(batch_size * num_points, THREADS_PER_BLOCK));
+  dim3 threads(THREADS_BLOCK_X, THREADS_BLOCK_Y);
+
+  voxel_pooling_train_forward_kernel<<<blocks, threads, 0, stream>>>(
       batch_size, num_points, num_channels, num_voxel_x, num_voxel_y,
       num_voxel_z, geom_xyz, input_features, output_features, pos_memo);
   err = cudaGetLastError();

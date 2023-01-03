@@ -3,7 +3,7 @@ import unittest
 import pytest
 import torch
 
-from bevdepth.ops.voxel_pooling import voxel_pooling
+from bevdepth.ops.voxel_pooling_train import voxel_pooling_train
 
 
 class TestLSSFPN(unittest.TestCase):
@@ -30,7 +30,7 @@ class TestLSSFPN(unittest.TestCase):
                     continue
                 gt_bev_featuremap[i, y, x, :] += gt_features[i, j, :]
         gt_bev_featuremap = gt_bev_featuremap.permute(0, 3, 1, 2).cuda()
-        bev_featuremap = voxel_pooling(
+        bev_featuremap = voxel_pooling_train(
             geom_xyz.cuda().int(), features.cuda(),
             torch.tensor([128, 128, 1], dtype=torch.int, device='cuda'))
         assert torch.allclose(gt_bev_featuremap.cuda(),

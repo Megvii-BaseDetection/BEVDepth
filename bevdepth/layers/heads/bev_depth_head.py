@@ -148,6 +148,7 @@ class BEVDepthHead(CenterHead):
         Returns:
             tuple(list[dict]): Output results for tasks.
         """
+        x = x.float()
         # FPN
         trunk_outs = [x]
         if self.trunk.deep_stem:

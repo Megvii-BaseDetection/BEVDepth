@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from mmdet.models.backbones.resnet import BasicBlock
 
-from bevdepth.ops.voxel_pooling import voxel_pooling
+from bevdepth.ops.voxel_pooling_train import voxel_pooling_train
 
 from .base_lss_fpn import ASPP, BaseLSSFPN, Mlp, SELayer
 
@@ -148,8 +148,9 @@ class FusionLSSFPN(BaseLSSFPN):
         img_feat_with_depth = img_feat_with_depth.permute(0, 1, 3, 4, 5, 2)
         geom_xyz = ((geom_xyz - (self.voxel_coord - self.voxel_size / 2.0)) /
                     self.voxel_size).int()
-        feature_map = voxel_pooling(geom_xyz, img_feat_with_depth.contiguous(),
-                                    self.voxel_num.cuda())
+        feature_map = voxel_pooling_train(geom_xyz,
+                                          img_feat_with_depth.contiguous(),
+                                          self.voxel_num.cuda())
         if is_return_depth:
             return feature_map.contiguous(), depth
         return feature_map.contiguous()

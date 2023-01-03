@@ -2,10 +2,10 @@
 import torch
 from torch.autograd import Function
 
-from . import voxel_pooling_ext
+from . import voxel_pooling_train_ext
 
 
-class VoxelPooling(Function):
+class VoxelPoolingTrain(Function):
 
     @staticmethod
     def forward(ctx, geom_xyz: torch.Tensor, input_features: torch.Tensor,
@@ -39,7 +39,7 @@ class VoxelPooling(Function):
                                                    voxel_num[0], num_channels)
         # Save the position of bev_feature_map for each input point.
         pos_memo = geom_xyz.new_ones(batch_size, num_points, 3) * -1
-        voxel_pooling_ext.voxel_pooling_forward_wrapper(
+        voxel_pooling_train_ext.voxel_pooling_train_forward_wrapper(
             batch_size,
             num_points,
             num_channels,
@@ -70,4 +70,4 @@ class VoxelPooling(Function):
         return None, grad_input_features, None
 
 
-voxel_pooling = VoxelPooling.apply
+voxel_pooling_train = VoxelPoolingTrain.apply
