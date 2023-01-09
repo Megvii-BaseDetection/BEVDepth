@@ -28,4 +28,5 @@ from bevdepth.exps.nuscenes.mv.bev_depth_lss_r50_256x704_128x128_20e_cbgs_2key_d
 if __name__ == '__main__':
     run_cli(BEVDepthLightningModel,
             'bev_depth_lss_r50_256x704_128x128_20e_cbgs_2key_da_ema',
-            use_ema=True)
+            use_ema=True,
+            extra_trainer_config_args={'epochs': 20})

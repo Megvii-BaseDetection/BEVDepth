@@ -12,7 +12,8 @@ from .nuscenes.base_exp import BEVDepthLightningModel
 
 def run_cli(model_class=BEVDepthLightningModel,
             exp_name='base_exp',
-            use_ema=False):
+            use_ema=False,
+            extra_trainer_config_args={}):
     parent_parser = ArgumentParser(add_help=False)
     parent_parser = pl.Trainer.add_argparse_args(parent_parser)
     parent_parser.add_argument('-e',
@@ -34,7 +35,7 @@ def run_cli(model_class=BEVDepthLightningModel,
     parser = BEVDepthLightningModel.add_model_specific_args(parent_parser)
     parser.set_defaults(profiler='simple',
                         deterministic=False,
-                        max_epochs=24,
+                        max_epochs=extra_trainer_config_args.get('epochs', 24),
                         accelerator='ddp',
                         num_sanity_val_steps=0,
                         gradient_clip_val=5,
