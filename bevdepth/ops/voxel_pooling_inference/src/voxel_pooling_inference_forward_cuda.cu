@@ -165,8 +165,7 @@ void voxel_pooling_inference_forward_kernel_launcher(
     int batch_size, int num_cams, int num_depth, int num_height, int num_width,
     int num_channels, int num_voxel_x, int num_voxel_y, int num_voxel_z,
     const int *geom_xyz, const half *depth_features,
-    const half *context_features, half *output_features,
-    cudaStream_t stream) {
+    const half *context_features, half *output_features, cudaStream_t stream) {
   cudaError_t err;
   dim3 blocks(DIVUP(batch_size * num_cams * num_depth * num_height * num_width,
                     THREADS_PER_BLOCK));

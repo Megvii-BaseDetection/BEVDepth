@@ -12,7 +12,12 @@ from torch import nn
 
 from bevdepth.layers.backbones.base_lss_fpn import (ASPP, BaseLSSFPN, Mlp,
                                                     SELayer)
-from bevdepth.ops.voxel_pooling_train import voxel_pooling_train
+
+try:
+    from bevdepth.ops.voxel_pooling_inference import voxel_pooling_inference
+    from bevdepth.ops.voxel_pooling_train import voxel_pooling_train
+except ImportError:
+    print('Import VoxelPooling fail.')
 
 __all__ = ['BEVStereoLSSFPN']
 
@@ -765,30 +770,36 @@ class BEVStereoLSSFPN(BaseLSSFPN):
         batch_size, num_cams = context.shape[0], context.shape[1]
         context = context.reshape(batch_size * num_cams, *context.shape[2:])
         depth = depth_score
-        img_feat_with_depth = depth.unsqueeze(1) * context.unsqueeze(2)
-
-        img_feat_with_depth = self._forward_voxel_net(img_feat_with_depth)
-
-        img_feat_with_depth = img_feat_with_depth.reshape(
-            batch_size,
-            num_cams,
-            img_feat_with_depth.shape[1],
-            img_feat_with_depth.shape[2],
-            img_feat_with_depth.shape[3],
-            img_feat_with_depth.shape[4],
-        )
         geom_xyz = self.get_geometry(
             mats_dict['sensor2ego_mats'][:, sweep_index, ...],
             mats_dict['intrin_mats'][:, sweep_index, ...],
             mats_dict['ida_mats'][:, sweep_index, ...],
             mats_dict.get('bda_mat', None),
         )
-        img_feat_with_depth = img_feat_with_depth.permute(0, 1, 3, 4, 5, 2)
         geom_xyz = ((geom_xyz - (self.voxel_coord - self.voxel_size / 2.0)) /
                     self.voxel_size).int()
-        feature_map = voxel_pooling_train(geom_xyz,
-                                          img_feat_with_depth.contiguous(),
-                                          self.voxel_num.cuda())
+        if True:
+            img_feat_with_depth = depth.unsqueeze(1) * context.unsqueeze(2)
+
+            img_feat_with_depth = self._forward_voxel_net(img_feat_with_depth)
+
+            img_feat_with_depth = img_feat_with_depth.reshape(
+                batch_size,
+                num_cams,
+                img_feat_with_depth.shape[1],
+                img_feat_with_depth.shape[2],
+                img_feat_with_depth.shape[3],
+                img_feat_with_depth.shape[4],
+            )
+            img_feat_with_depth = img_feat_with_depth.permute(0, 1, 3, 4, 5, 2)
+
+            feature_map = voxel_pooling_train(geom_xyz,
+                                              img_feat_with_depth.contiguous(),
+                                              self.voxel_num.cuda())
+        else:
+            feature_map = voxel_pooling_inference(geom_xyz, depth.contiguous(),
+                                                  context.contiguous(),
+                                                  self.voxel_num.cuda())
         if is_return_depth:
             return feature_map.contiguous(), depth
         return feature_map.contiguous()
@@ -936,11 +947,13 @@ class BEVStereoLSSFPN(BaseLSSFPN):
             if self.use_mask:
                 depth_score = (
                     mono_depth_all_sweeps[ref_idx] +
-                    self.depth_downsample_net(stereo_depth) * mask).softmax(1)
+                    self.depth_downsample_net(stereo_depth) * mask).softmax(
+                        1, dtype=stereo_depth.dtype)
             else:
                 depth_score = (
                     mono_depth_all_sweeps[ref_idx] +
-                    self.depth_downsample_net(stereo_depth)).softmax(1)
+                    self.depth_downsample_net(stereo_depth)).softmax(
+                        1, dtype=stereo_depth.dtype)
             depth_score_all_sweeps.append(depth_score)
 
         key_frame_res = self._forward_single_sweep(

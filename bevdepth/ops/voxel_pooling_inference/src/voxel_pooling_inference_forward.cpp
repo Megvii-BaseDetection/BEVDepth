@@ -58,8 +58,7 @@ int voxel_pooling_inference_forward_wrapper(
         (half *)depth_features_tensor.data_ptr<at::Half>();
     const half *context_features =
         (half *)context_features_tensor.data_ptr<at::Half>();
-    half *output_features =
-        (half *)output_features_tensor.data_ptr<at::Half>();
+    half *output_features = (half *)output_features_tensor.data_ptr<at::Half>();
     voxel_pooling_inference_forward_kernel_launcher(
         batch_size, num_cams, num_depth, num_height, num_width, num_channels,
         num_voxel_x, num_voxel_y, num_voxel_z, geom_xyz, depth_features,
