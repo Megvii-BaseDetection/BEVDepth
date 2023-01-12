@@ -31,8 +31,8 @@ void voxel_pooling_inference_forward_kernel_launcher(
 void voxel_pooling_inference_forward_kernel_launcher(
     int batch_size, int num_cams, int num_depth, int num_height, int num_width,
     int num_channels, int num_voxel_x, int num_voxel_y, int num_voxel_z,
-    const int *geom_xyz, const half2 *depth_features,
-    const half2 *context_features, half2 *output_features, cudaStream_t stream);
+    const int *geom_xyz, const half *depth_features,
+    const half *context_features, half *output_features, cudaStream_t stream);
 
 int voxel_pooling_inference_forward_wrapper(
     int batch_size, int num_cams, int num_depth, int num_height, int num_width,
@@ -54,12 +54,12 @@ int voxel_pooling_inference_forward_wrapper(
         context_features, output_features, stream);
   } else if (depth_features_tensor.dtype() == at::kHalf) {
     assert(num_channels % 2 == 0);
-    const half2 *depth_features =
-        (half2 *)depth_features_tensor.data_ptr<at::Half>();
-    const half2 *context_features =
-        (half2 *)context_features_tensor.data_ptr<at::Half>();
-    half2 *output_features =
-        (half2 *)output_features_tensor.data_ptr<at::Half>();
+    const half *depth_features =
+        (half *)depth_features_tensor.data_ptr<at::Half>();
+    const half *context_features =
+        (half *)context_features_tensor.data_ptr<at::Half>();
+    half *output_features =
+        (half *)output_features_tensor.data_ptr<at::Half>();
     voxel_pooling_inference_forward_kernel_launcher(
         batch_size, num_cams, num_depth, num_height, num_width, num_channels,
         num_voxel_x, num_voxel_y, num_voxel_z, geom_xyz, depth_features,

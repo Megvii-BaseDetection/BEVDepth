@@ -89,7 +89,7 @@ void voxel_pooling_train_forward_kernel_launcher(
 void voxel_pooling_train_forward_kernel_launcher(
     int batch_size, int num_points, int num_channels, int num_voxel_x,
     int num_voxel_y, int num_voxel_z, const int *geom_xyz,
-    const half2 *input_features, half2 *output_features, int *pos_memo,
+    const half *input_features, half *output_features, int *pos_memo,
     cudaStream_t stream) {
   cudaError_t err;
 

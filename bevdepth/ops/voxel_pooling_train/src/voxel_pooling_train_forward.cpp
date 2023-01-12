@@ -32,7 +32,7 @@ void voxel_pooling_train_forward_kernel_launcher(
 void voxel_pooling_train_forward_kernel_launcher(
     int batch_size, int num_points, int num_channels, int num_voxel_x,
     int num_voxel_y, int num_voxel_z, const int *geom_xyz,
-    const half2 *input_features, half2 *output_features, int *pos_memo,
+    const half *input_features, half *output_features, int *pos_memo,
     cudaStream_t stream);
 
 int voxel_pooling_train_forward_wrapper(int batch_size, int num_points,
@@ -59,10 +59,10 @@ int voxel_pooling_train_forward_wrapper(int batch_size, int num_points,
 
   else if (input_features_tensor.dtype() == at::kHalf) {
     assert(num_channels % 2 == 0);
-    const half2 *input_features =
-        (half2 *)(input_features_tensor.data_ptr<at::Half>());
-    half2 *output_features =
-        (half2 *)(output_features_tensor.data_ptr<at::Half>());
+    const half *input_features =
+        (half *)(input_features_tensor.data_ptr<at::Half>());
+    half *output_features =
+        (half *)(output_features_tensor.data_ptr<at::Half>());
     voxel_pooling_train_forward_kernel_launcher(
         batch_size, num_points, num_channels, num_voxel_x, num_voxel_y,
         num_voxel_z, geom_xyz, input_features, output_features, pos_memo,

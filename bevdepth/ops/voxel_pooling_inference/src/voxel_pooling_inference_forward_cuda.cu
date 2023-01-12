@@ -12,8 +12,8 @@
 __global__ void voxel_pooling_inference_forward_kernel(
     int batch_size, int num_cams, int num_depth, int num_height, int num_width,
     int num_channels, int num_voxel_x, int num_voxel_y, int num_voxel_z,
-    const int *geom_xyz, const half2 *depth_features,
-    const half2 *context_features, half2 *output_features) {
+    const int *geom_xyz, const half *depth_features,
+    const half *context_features, half *output_features) {
   const int bidx = blockIdx.x;
   const int tidx = threadIdx.x;
   const int tidy = threadIdx.y;
@@ -58,15 +58,14 @@ __global__ void voxel_pooling_inference_forward_kernel(
     // if(batch_idx > 0 || cam_idx > 0)
     // printf("batch_idx: %d, width_idx: %d, height_idx: %d, cam_idx: %d \n",
     // batch_idx, width_idx, height_idx, cam_idx);
-    const half2 depth_val = depth_features[sample_idx];
-    half2 res;
+    const half depth_val = depth_features[sample_idx];
+    half res;
     for (int j = tidx; j < num_channels; j += THREADS_BLOCK_X) {
-      const half2 context_val = context_features
+      const half context_val = context_features
           [batch_idx * (num_cams * num_channels * num_height * num_width) +
            cam_idx * (num_channels * num_height * num_width) +
            j * (num_height * num_width) + height_idx * num_width + width_idx];
-      res.x = __hadd(depth_val.x, context_val.x);
-      res.y = __hadd(depth_val.y, context_val.y);
+      res = __hmul(depth_val, context_val);
       atomicAdd(&output_features[(batch_idx * num_voxel_y * num_voxel_x +
                                   sample_y * num_voxel_x + sample_x) *
                                      num_channels +
@@ -165,8 +164,8 @@ void voxel_pooling_inference_forward_kernel_launcher(
 void voxel_pooling_inference_forward_kernel_launcher(
     int batch_size, int num_cams, int num_depth, int num_height, int num_width,
     int num_channels, int num_voxel_x, int num_voxel_y, int num_voxel_z,
-    const int *geom_xyz, const half2 *depth_features,
-    const half2 *context_features, half2 *output_features,
+    const int *geom_xyz, const half *depth_features,
+    const half *context_features, half *output_features,
     cudaStream_t stream) {
   cudaError_t err;
   dim3 blocks(DIVUP(batch_size * num_cams * num_depth * num_height * num_width,
