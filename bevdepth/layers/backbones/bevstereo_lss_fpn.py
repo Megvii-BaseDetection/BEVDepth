@@ -878,7 +878,7 @@ class BEVStereoLSSFPN(BaseLSSFPN):
             mono_depth_all_sweeps.append(mono_depth)
             range_score_all_sweeps.append(range_score)
         depth_score_all_sweeps = list()
-
+        final_depth = None
         for ref_idx in range(num_sweeps):
             sensor2sensor_mats = list()
             for src_idx in range(num_sweeps):
@@ -955,7 +955,12 @@ class BEVStereoLSSFPN(BaseLSSFPN):
                     self.depth_downsample_net(stereo_depth)).softmax(
                         1, dtype=stereo_depth.dtype)
             depth_score_all_sweeps.append(depth_score)
-
+            if ref_idx == 0:
+                # final_depth has to be fp32, otherwise the
+                # depth loss will colapse during the traing process.
+                final_depth = (
+                    mono_depth_all_sweeps[ref_idx] +
+                    self.depth_downsample_net(stereo_depth)).softmax(1)
         key_frame_res = self._forward_single_sweep(
             0,
             context_all_sweeps[0].reshape(batch_size, num_cams,
@@ -985,6 +990,6 @@ class BEVStereoLSSFPN(BaseLSSFPN):
                 ret_feature_list.append(feature_map)
 
         if is_return_depth:
-            return torch.cat(ret_feature_list, 1), depth_score_all_sweeps[0]
+            return torch.cat(ret_feature_list, 1), final_depth
         else:
             return torch.cat(ret_feature_list, 1)

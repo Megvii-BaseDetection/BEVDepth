@@ -550,7 +550,10 @@ class BaseLSSFPN(nn.Module):
                     self.depth_channels + self.output_channels)].contiguous(),
                 self.voxel_num.cuda())
         if is_return_depth:
-            return feature_map.contiguous(), depth.float()
+            # final_depth has to be fp32, otherwise the depth
+            # loss will colapse during the traing process.
+            return feature_map.contiguous(
+            ), depth_feature[:, :self.depth_channels].softmax(dim=1)
         return feature_map.contiguous()
 
     def forward(self,
