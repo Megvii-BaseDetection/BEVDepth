@@ -519,6 +519,7 @@ class BEVStereoLSSFPN(BaseLSSFPN):
         batch_size_with_cams, _, feat_height, feat_width = \
             stereo_feats_all_sweeps[0].shape
         device = stereo_feats_all_sweeps[0].device
+        dtype = stereo_feats_all_sweeps[0].dtype
         d_coords = torch.arange(*self.d_bound,
                                 dtype=torch.float,
                                 device=device).reshape(1, -1, 1, 1)
@@ -535,7 +536,8 @@ class BEVStereoLSSFPN(BaseLSSFPN):
             self.downsample_factor,
         )
         score_all_ranges = list()
-        range_score = range_score_all_sweeps[sweep_index].softmax(1)
+        range_score = range_score_all_sweeps[sweep_index].softmax(1,
+                                                                  dtype=dtype)
         for range_idx in range(self.num_ranges):
             # Map mu to the corresponding interval.
             range_start = self.range_list[range_idx][0]
@@ -556,7 +558,7 @@ class BEVStereoLSSFPN(BaseLSSFPN):
                 depth_sample = torch.cat([mu + sigma * k for k in self.k_list],
                                          1)
                 depth_sample_frustum = self.create_depth_sample_frustum(
-                    depth_sample, self.stereo_downsample_factor)
+                    depth_sample, self.stereo_downsample_factor, dtype=dtype)
                 mu_score = self._generate_cost_volume(
                     sweep_index,
                     stereo_feats_all_sweeps,
@@ -565,15 +567,19 @@ class BEVStereoLSSFPN(BaseLSSFPN):
                     depth_sample_frustum,
                     sensor2sensor_mats,
                 )
-                mu_score = mu_score.softmax(1)
+                mu_score = mu_score.softmax(1, dtype=dtype)
                 scale_factor = torch.clamp(
-                    0.5 / (1e-4 + mu_score[:, self.num_samples //
-                                           2:self.num_samples // 2 + 1, ...]),
-                    min=0.1,
-                    max=10)
+                    torch.tensor([0.5], dtype=dtype, device=device) /
+                    (torch.tensor([1e-4], dtype=dtype, device=device) +
+                     mu_score[:, self.num_samples // 2:self.num_samples // 2 +
+                              1, ...]),
+                    min=torch.tensor([0.1], dtype=dtype, device=device),
+                    max=torch.tensor([10], dtype=dtype, device=device))
 
-                sigma = torch.clamp(sigma * scale_factor, min=0.1, max=10)
-                mu = (depth_sample * mu_score).sum(1, keepdim=True)
+                sigma = sigma * scale_factor
+                mu = (depth_sample * mu_score).sum(1,
+                                                   keepdim=True,
+                                                   dtype=dtype)
                 del depth_sample
                 del depth_sample_frustum
             range_length = int(
@@ -586,7 +592,7 @@ class BEVStereoLSSFPN(BaseLSSFPN):
                     self.downsample_factor // self.stereo_downsample_factor,
                 )
                 depth_sample_frustum = self.create_depth_sample_frustum(
-                    depth_sample, self.downsample_factor)
+                    depth_sample, self.downsample_factor, dtype=dtype)
                 mask = self._forward_mask(
                     sweep_index,
                     mono_depth_all_sweeps,
@@ -605,17 +611,19 @@ class BEVStereoLSSFPN(BaseLSSFPN):
             sigma = torch.clamp(sigma, self.min_sigma)
             mu_repeated = mu.repeat(1, range_length, 1, 1)
             eps = 1e-6
-            depth_score_single_range = (-1 / 2 * (
-                (d_coords[:,
-                          int((range_start - self.d_bound[0]) //
-                              self.d_bound[2]):range_length + int(
-                                  (range_start - self.d_bound[0]) //
-                                  self.d_bound[2]), ..., ] - mu_repeated) /
-                torch.sqrt(sigma))**2)
-            depth_score_single_range = depth_score_single_range.exp()
-            score_all_ranges.append(mu_score.sum(1).unsqueeze(1))
+            depth_score_single_range = (-1 / 2 * torch.pow(
+                ((d_coords[:,
+                           int((range_start - self.d_bound[0]) //
+                               self.d_bound[2]):range_length + int(
+                                   (range_start - self.d_bound[0]) //
+                                   self.d_bound[2]), ..., ] - mu_repeated) /
+                 torch.sqrt(sigma)), 2)).to(dtype)
+            depth_score_single_range = depth_score_single_range.exp().to(dtype)
+            score_all_ranges.append(mu_score.sum(1, dtype=dtype).unsqueeze(1))
             depth_score_single_range = depth_score_single_range / (
-                sigma * math.sqrt(2 * math.pi) + eps)
+                sigma * torch.tensor(
+                    math.sqrt(2 * math.pi), device=device, dtype=dtype) +
+                torch.tensor(eps, dtype=dtype, device=device))
             stereo_depth[:,
                          int((range_start - self.d_bound[0]) //
                              self.d_bound[2]):range_length +
@@ -630,7 +638,10 @@ class BEVStereoLSSFPN(BaseLSSFPN):
         else:
             return stereo_depth
 
-    def create_depth_sample_frustum(self, depth_sample, downsample_factor=16):
+    def create_depth_sample_frustum(self,
+                                    depth_sample,
+                                    downsample_factor=16,
+                                    dtype=torch.float32):
         """Generate frustum"""
         # make grid in image plane
         ogfH, ogfW = self.final_dim
@@ -639,7 +650,7 @@ class BEVStereoLSSFPN(BaseLSSFPN):
         x_coords = (torch.linspace(0,
                                    ogfW - 1,
                                    fW,
-                                   dtype=torch.float,
+                                   dtype=dtype,
                                    device=depth_sample.device).view(
                                        1, 1, 1,
                                        fW).expand(batch_size, num_depth, fH,
@@ -647,7 +658,7 @@ class BEVStereoLSSFPN(BaseLSSFPN):
         y_coords = (torch.linspace(0,
                                    ogfH - 1,
                                    fH,
-                                   dtype=torch.float,
+                                   dtype=dtype,
                                    device=depth_sample.device).view(
                                        1, 1, fH,
                                        1).expand(batch_size, num_depth, fH,
@@ -877,6 +888,7 @@ class BEVStereoLSSFPN(BaseLSSFPN):
             sigma_all_sweeps.append(sigma)
             mono_depth_all_sweeps.append(mono_depth)
             range_score_all_sweeps.append(range_score)
+        dtype = img_feats.dtype
         depth_score_all_sweeps = list()
         final_depth = None
         for ref_idx in range(num_sweeps):
@@ -948,12 +960,12 @@ class BEVStereoLSSFPN(BaseLSSFPN):
                 depth_score = (
                     mono_depth_all_sweeps[ref_idx] +
                     self.depth_downsample_net(stereo_depth) * mask).softmax(
-                        1, dtype=stereo_depth.dtype)
+                        1, dtype=dtype)
             else:
                 depth_score = (
                     mono_depth_all_sweeps[ref_idx] +
                     self.depth_downsample_net(stereo_depth)).softmax(
-                        1, dtype=stereo_depth.dtype)
+                        1, dtype=dtype)
             depth_score_all_sweeps.append(depth_score)
             if ref_idx == 0:
                 # final_depth has to be fp32, otherwise the
