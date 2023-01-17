@@ -778,7 +778,7 @@ class BEVStereoLSSFPN(BaseLSSFPN):
         )
         geom_xyz = ((geom_xyz - (self.voxel_coord - self.voxel_size / 2.0)) /
                     self.voxel_size).int()
-        if True:
+        if self.training or self.use_da:
             img_feat_with_depth = depth.unsqueeze(1) * context.unsqueeze(2)
 
             img_feat_with_depth = self._forward_voxel_net(img_feat_with_depth)

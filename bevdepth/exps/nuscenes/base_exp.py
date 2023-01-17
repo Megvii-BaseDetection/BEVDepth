@@ -270,7 +270,7 @@ class BEVDepthLightningModel(LightningModule):
 
         with autocast(enabled=False):
             depth_loss = (F.binary_cross_entropy(
-                depth_preds[fg_mask],
+                depth_preds[fg_mask].float(),
                 depth_labels[fg_mask],
                 reduction='none',
             ).sum() / max(1.0, fg_mask.sum()))

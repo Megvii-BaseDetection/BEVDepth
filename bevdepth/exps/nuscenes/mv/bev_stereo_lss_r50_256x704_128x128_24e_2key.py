@@ -37,7 +37,7 @@ class BEVDepthLightningModel(BaseBEVDepthLightningModel):
         self.head_conf['bev_neck_conf']['in_channels'] = [
             80 * (len(self.key_idxes) + 1), 160, 320, 640
         ]
-        self.head_conf['train_cfg']['code_weight'] = [
+        self.head_conf['train_cfg']['code_weights'] = [
             1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
         ]
         self.head_conf['test_cfg']['thresh_scale'] = [
