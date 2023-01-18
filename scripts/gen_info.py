@@ -78,7 +78,7 @@ def generate_info(nusc, scenes, max_cam_sweeps=6, max_lidar_sweeps=10):
                                 'sample_token']:
                             break
                         sweep_cam_info['ego_pose'] = nusc.get(
-                            'ego_pose', cam_data['ego_pose_token'])
+                            'ego_pose', sweep_cam_data['ego_pose_token'])
                         sweep_cam_info['timestamp'] = sweep_cam_data[
                             'timestamp']
                         sweep_cam_info['is_key_frame'] = sweep_cam_data[
@@ -88,7 +88,7 @@ def generate_info(nusc, scenes, max_cam_sweeps=6, max_lidar_sweeps=10):
                         sweep_cam_info['filename'] = sweep_cam_data['filename']
                         sweep_cam_info['calibrated_sensor'] = nusc.get(
                             'calibrated_sensor',
-                            cam_data['calibrated_sensor_token'])
+                            sweep_cam_data['calibrated_sensor_token'])
                         cam_sweeps[j][cam_names[k]] = sweep_cam_info
 
             for k, lidar_data in enumerate(lidar_datas):
@@ -115,7 +115,7 @@ def generate_info(nusc, scenes, max_cam_sweeps=6, max_lidar_sweeps=10):
                             'filename']
                         sweep_lidar_info['calibrated_sensor'] = nusc.get(
                             'calibrated_sensor',
-                            cam_data['calibrated_sensor_token'])
+                            sweep_lidar_data['calibrated_sensor_token'])
                         lidar_sweeps[j][lidar_names[k]] = sweep_lidar_info
             # Remove empty sweeps.
             for i, sweep in enumerate(cam_sweeps):
